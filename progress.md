@@ -5,10 +5,40 @@ Live record of what has been built. Agents add an entry here after every task (f
 ## Current status
 
 - **Current phase:** Phase 4 — Link and store
-- **Next task:** 4.2 — Knowledge graph writer (4.3 Search indexes can run in parallel; Phase 5 can start any time)
-- **Completed tasks:** 0.1–0.6 (Phase 0 complete), 1.1–1.6 (Phase 1 complete), 2.1–2.3 (Phase 2 complete), 3.1–3.4 (Phase 3 complete), 4.1
+- **Next task:** 4.3 — Search indexes (Phase 5 can start any time)
+- **Completed tasks:** 0.1–0.6 (Phase 0 complete), 1.1–1.6 (Phase 1 complete), 2.1–2.3 (Phase 2 complete), 3.1–3.4 (Phase 3 complete), 4.1–4.2
 
 ## Log
+
+### Task 4.2 — Knowledge graph writer  ✅ done
+**Date:** 2026-10-15
+
+**Built**
+- `app/learning/graph.py`: `write_graph(session, conversation, chunks, found, decision)` saves what one conversation (the root item, then its replies) says:
+  - person **authored** item (every item's author, and everyone who wrote in a Slack thread); person **reviewed** PR (the authors of its review items, except the PR's own author); chunk **mentions** entity (GLiNER hits and Slack mentions, linked by Task 4.1); person **decided** decision; decision **about** entity (the services, tools and projects whose key appears in the decision or its reason).
+  - At most one `decisions` row per root: `link` = the root's link, `decided_at` = the conversation's last activity, `people` = the deciders.
+  - It first deletes the links learned from these items and their decisions, so re-running (or re-reading a decision) replaces instead of duplicating. A link that appears twice in one write is stored once (`ON CONFLICT DO NOTHING` on the unique 5-tuple).
+- Migration `0002`: `edges.item_id` cascades with its item (it was SET NULL) and is indexed. Deleting an item or a source now deletes the links learned from it.
+- `link.keys_in(text)`: the key of every run of up to 6 words in a text, i.e. which names it may mention. `triage.is_bot(author)` is shared by triage and the writer (bots are never people).
+- Test: a PR (with bob's approving review and alice's reply on her own PR) and a Slack thread (with a bot line and a `<@U03>` mention), written twice: the expected 21 links and 8 entities exist exactly once. A re-read without a decision removes the old decision and its links; deleting the Slack source removes everything learned from it. Checked that the test fails without the delete-first step or the conflict handling.
+
+**Key files**
+- `backend/app/learning/graph.py`, `backend/migrations/versions/0002_edges_cascade_with_item.py`, `backend/app/db/schema.py`, `backend/app/learning/link.py`, `backend/app/learning/triage.py`, `backend/tests/test_graph.py`
+
+**Decisions**
+- Every link carries the item it was learned from (`edges.item_id`): the item itself for authored and mentions, the review for reviewed, the root for decided and about. "Replace what these items said" is then one delete, and deletion cascades.
+- The unit of writing is a conversation (Task 3.3 contract: root first, then its non-noise replies, oldest first). Task 4.4 must pass the whole conversation, with the chunks of all its items, whenever any member changes.
+- Directions: person → item (authored, reviewed), chunk → entity (mentions), person → decision (decided), decision → entity (about). Graph search (Task 6.4) follows them both ways.
+- `decisions.people` holds account ids, the same ones the `decided` links resolve; readable names come from aliases.
+- `owns` and `depends_on` are not written: nothing extracts them yet (GLiNER finds entities, not relations, and the decision reader returns only decision / reason / people).
+
+**How to run / test**
+- `make migrate` (new migration 0002) · `make test`
+
+**Known issues / TODO**
+- An "about" link needs GLiNER to have found the entity somewhere in the conversation; a service named only in the decision text gets none.
+- Entities and person aliases stay when their last link goes (a deleted source's people keep their account aliases). Per-user deletion (Phase 9) must delete person entities by account alias.
+- Slack thread repliers are linked as `authored` to the whole thread (each wrote part of it).
 
 ### Task 4.1 — Entity linking (SBERT)  ✅ done
 **Date:** 2026-10-15

@@ -466,7 +466,7 @@ flowchart LR
 
 **Phase 4 — Link and store**
 - [x] 4.1 Entity linking (SBERT)
-- [ ] 4.2 Knowledge graph writer
+- [x] 4.2 Knowledge graph writer
 - [ ] 4.3 Search indexes
 - [ ] 4.4 Learning pipeline orchestration
 

@@ -80,7 +80,7 @@ Status: ✅ PASS · ❌ FAIL → 🔧 fixed · ⚠️ open · ➖ N/A
 | Password hashing | ➖ | No passwords stored (Phase 9: argon2/bcrypt) |
 | Cookies / localStorage | ➖ | No frontend |
 | Response filtering | ✅ | Only `/health` |
-| Data deletion | ➖ / ⚠️ | No user accounts yet. Deleting a `sources` row cascades to its items and chunks. Phase 9 must add per-user deletion (FKs already `ON DELETE CASCADE` on `users`) |
+| Data deletion | ➖ / ⚠️ | No user accounts yet. Deleting a `sources` row cascades to its items, chunks, decisions and graph links (links since migration 0002). Phase 9 must add per-user deletion (FKs already `ON DELETE CASCADE` on `users`), including the person entities whose aliases are that user's accounts |
 
 **§3 Frontend:** every item is ➖ **N/A (no frontend until Phase 9)**. XSS, CSRF, CORS, CSP, clickjacking, open redirects, token storage, OAuth/PKCE, HTTPS/mixed content, WebSocket/SSE auth, UI rate limiting, `npm audit`/SRI and error display are all in the "must do when built" list.
 

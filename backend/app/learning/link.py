@@ -53,6 +53,14 @@ def key(name: str) -> str:
     return "".join(_singular(w) for w in words(name))
 
 
+def keys_in(text: str, longest: int = 6) -> set[str]:
+    """The key of every run of up to `longest` words in `text`: the names it may mention."""
+    w = [_singular(word) for word in words(text)]
+    return {
+        "".join(w[i:j]) for i in range(len(w)) for j in range(i + 1, min(i + longest, len(w)) + 1)
+    }
+
+
 def link_entities(session: Session, found: Iterable[FoundEntity]) -> dict[tuple[str, str], int]:
     """The entity id of every found (name, type): new names become entities or aliases."""
     by_key, things = _name_aliases(session)

@@ -48,11 +48,15 @@ def train() -> float:
     return hits / len(y_test)
 
 
+def is_bot(author: str | None) -> bool:
+    """GitHub apps (`github:…[bot]`) and Slack bots (`slack:B…`)."""
+    author = author or ""
+    return author.endswith("[bot]") or author.startswith("slack:B")
+
+
 def is_obvious_noise(item: Item) -> bool:
     """Nothing to read, or written by a bot. A bot-started thread may still hold human replies."""
-    author = item.author or ""
-    bot = author.endswith("[bot]") or author.startswith("slack:B")  # GitHub apps, Slack bot ids
-    return not item.full_text or (bot and item.type != "thread")
+    return not item.full_text or (is_bot(item.author) and item.type != "thread")
 
 
 def triage(items: Sequence[Item], classify: Classify = _model) -> list[str]:

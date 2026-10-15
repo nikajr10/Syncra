@@ -175,7 +175,8 @@ class Edge(Base):
     """Knowledge-graph link between two nodes of any node table.
 
     (src_type, src_id) --relation--> (dst_type, dst_id); node types: entity, item, chunk, decision.
-    Relations: authored, reviewed, mentions, decided, about, owns, depends_on.
+    Relations: authored, reviewed, mentions, decided, about (written by app/learning/graph.py);
+    owns, depends_on (reserved). Each link is deleted with the item it was learned from.
     """
 
     __tablename__ = "edges"
@@ -187,8 +188,8 @@ class Edge(Base):
     dst_type: Mapped[str] = mapped_column(String(20))
     dst_id: Mapped[int] = mapped_column(BigInteger)
     item_id: Mapped[int | None] = mapped_column(
-        BigInteger, ForeignKey("items.id", ondelete="SET NULL")
-    )  # evidence the link came from
+        BigInteger, ForeignKey("items.id", ondelete="CASCADE"), index=True
+    )  # evidence the link came from (migration 0002)
     created_at: Mapped[datetime] = _created_at()
 
 
