@@ -47,6 +47,7 @@ class GitHubConnector:
             raise ConfigError("GITHUB_TOKEN is not set")
         self.repo = repo
         self._sleep = sleep
+        self._origin = httpx.URL(api_url or settings.github_api_url).host
         self._client = httpx.Client(
             base_url=api_url or settings.github_api_url,
             headers={
@@ -86,6 +87,8 @@ class GitHubConnector:
             response = self._get(next_url, params=params)
             yield from response.json()
             next_url = response.links.get("next", {}).get("url")
+            if next_url and httpx.URL(next_url).host not in ("", self._origin):
+                raise RuntimeError(f"GitHub paging left {self._origin}; not sending the token")
             params = None  # the Link URL already carries page + filters
 
     # --- fetch ---------------------------------------------------------------------------

@@ -2,14 +2,27 @@
 
 from __future__ import annotations
 
+import re
+
 from app.db.schema import Source
 from app.learning.connectors.base import Connector, RawItem
 
 __all__ = ["Connector", "RawItem", "build_connector"]
 
+# external_id goes into API paths (GitHub) and JQL (Jira): anything else is rejected, so a crafted
+# id can't reach other repos / projects (path traversal, JQL injection) under this source's tag.
+EXTERNAL_ID = {
+    "github": re.compile(r"[A-Za-z0-9-]+/(?!\.{1,2}$)[A-Za-z0-9._-]+"),  # owner/repo
+    "jira": re.compile(r"[A-Z][A-Z0-9_]+"),  # project key
+    "slack": re.compile(r"[CG][A-Z0-9]+"),  # public / private channel id
+}
+
 
 def build_connector(source: Source) -> Connector:
     """`sources.external_id` is the repo (owner/name), Jira project key or Slack channel id."""
+    pattern = EXTERNAL_ID.get(source.kind)
+    if pattern and not pattern.fullmatch(source.external_id):
+        raise ValueError(f"invalid {source.kind} external_id {source.external_id!r}")
     if source.kind == "github":
         from app.learning.connectors.github import GitHubConnector
 

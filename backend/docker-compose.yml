@@ -16,9 +16,12 @@ x-backend: &backend
     DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-syncra}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-syncra}
     OLLAMA_BASE_URL: http://ollama:11434
     DEVICE: ${DEVICE:-cpu}  # cuda only with an NVIDIA image + the GPU reservation below
+    API_DOCS: "false"  # no public Swagger / OpenAPI in production
   volumes:
     - hf_models:/models
   restart: unless-stopped
+  security_opt:
+    - no-new-privileges:true
 
 services:
   postgres:
@@ -55,9 +58,11 @@ services:
 
   api:
     <<: *backend
-    command: sh -c "alembic upgrade head && uvicorn app.api.main:app --host 0.0.0.0 --port 8000"
+    command: sh -c "alembic upgrade head && uvicorn app.api.main:app --host 0.0.0.0 --port 8000 --no-server-header"
     ports:
-      - "${API_PORT:-8000}:8000"
+      # Host-local only: the API has no login yet. Publish it through a TLS reverse proxy
+      # (Caddy / nginx) on the same host, never directly on a public port.
+      - "127.0.0.1:${API_PORT:-8000}:8000"
     depends_on:
       postgres:
         condition: service_healthy

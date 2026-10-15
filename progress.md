@@ -10,6 +10,33 @@ Live record of what has been built. Agents add an entry here after every task (f
 
 ## Log
 
+### Security pass (not a phase task)  ✅ done
+**Date:** 2026-10-15
+
+**Built**
+- Checklist `security.md` run over the whole repo + git history; results and open items in `security-audit.md`.
+- `build_connector` rejects malformed `sources.external_id` (fixes Jira JQL injection, GitHub path traversal, Slack DM ids).
+- GitHub paging refuses `Link: next` URLs on another host (token never leaves the API host).
+- API middleware: security headers, strict CSP (not on /docs), `X-Request-ID`, generic 500 `{"detail","request_id"}`.
+- `API_DOCS` setting (default off; `.env.example` turns it on locally, compose forces it off).
+- Compose: API bound to `127.0.0.1`, `--no-server-header`, `no-new-privileges`; `.git` in `.dockerignore`.
+- `config/models.yaml`: every downloaded HF model pinned to a commit `revision`.
+
+**Key files**
+- `backend/app/learning/connectors/__init__.py`, `backend/app/learning/connectors/github.py`, `backend/app/api/main.py`, `backend/config/models.yaml`, `backend/docker-compose.yml`, `backend/tests/test_security.py`, `security-audit.md`
+
+**Decisions**
+- New source kinds must add an `EXTERNAL_ID` regex. New outbound clients must not follow URLs to other hosts with credentials.
+- New endpoints get headers and generic errors from the middleware; never return exception text to clients.
+- Changing an HF model means updating its `revision` too.
+- Phase 3/5/6/9 must meet the "fix later" items in `security-audit.md` §8 (prompt injection, in-query permission filter, auth/CORS/rate limits, per-user deletion).
+
+**How to run / test**
+- `make test` (65 pass) · `make lint`
+
+**Known issues / TODO**
+- Open: Python lock file, restricted DB role, gitleaks/pip-audit in CI, image digest pins, retry jitter (see `security-audit.md` §8).
+
 ### Task 1.6 — Scheduled sync job  ✅ done
 **Date:** 2026-10-15
 

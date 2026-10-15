@@ -4,6 +4,7 @@ Usage (from backend/):  make db-init        (needs a running PostgreSQL with pgv
 """
 
 import psycopg
+from psycopg import sql
 from sqlalchemy.engine import make_url
 
 from app.config.settings import get_settings
@@ -20,7 +21,7 @@ def ensure_database(url_str: str) -> None:
             "select 1 from pg_database where datname = %s", (url.database,)
         ).fetchone()
         if not exists:
-            conn.execute(f'CREATE DATABASE "{url.database}"')
+            conn.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(url.database)))
             print(f"created database {url.database}")
     with psycopg.connect(dsn, autocommit=True) as conn:
         conn.execute("CREATE EXTENSION IF NOT EXISTS vector")

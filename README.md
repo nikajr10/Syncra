@@ -56,4 +56,10 @@ docker compose exec ollama ollama pull qwen3:4b && docker compose exec ollama ol
 docker compose run --rm api python scripts/download_hf_models.py
 ```
 
-The API listens on `API_PORT` (default 8000). The compose Postgres is reachable from the host only on `127.0.0.1:POSTGRES_PORT`. For an NVIDIA GPU, build with `--build-arg TORCH_INDEX_URL=https://download.pytorch.org/whl/cu124` and uncomment the GPU reservation on the `ollama` service.
+The API listens on `127.0.0.1:API_PORT` (default 8000) only: put a TLS reverse proxy (Caddy / nginx) in front of it, and don't make it public before login exists (Phase 9). API docs (`/docs`) are off in production. The compose Postgres is reachable from the host only on `127.0.0.1:POSTGRES_PORT`. For an NVIDIA GPU, build with `--build-arg TORCH_INDEX_URL=https://download.pytorch.org/whl/cu124` and uncomment the GPU reservation on the `ollama` service.
+
+## Security
+
+- Secrets live only in `backend/.env` (git-ignored). **If a real token or password is ever committed, rotate it at the provider immediately.** Deleting the line doesn't help, because it stays in git history.
+- Never reuse the old local-dev database password `syncra` that appears in early commits.
+- Audit checklist: [`security.md`](security.md) · latest results and open items: [`security-audit.md`](security-audit.md).

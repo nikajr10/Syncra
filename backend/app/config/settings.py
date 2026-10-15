@@ -59,6 +59,7 @@ class Settings(BaseSettings):
 
     # --- misc ---
     log_level: str = "INFO"
+    api_docs: bool = False  # /docs, /redoc, /openapi.json; off unless set (local dev turns it on)
 
 
 class ModelSpec(BaseModel):
