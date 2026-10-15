@@ -3,6 +3,8 @@
 - `ollama()` -> `OllamaClient`: generate (normal + streaming), JSON mode, timeout, retry.
 - `load_sentence_transformer(role)` / `load_cross_encoder(role)`: Hugging Face models loaded once,
   cached in memory, on GPU (cuda / mps) when available.
+- `train_setfit(role, ...)` / `classify(role, texts)`: SetFit classifiers trained here from the
+  `<role>_base` body and saved under TRAINED_MODELS_DIR.
 
 Models are addressed by **role** from config/models.yaml (e.g. "answer_writer"), never by name.
 Every call logs model name, time taken and token / item count.
@@ -12,14 +14,16 @@ from __future__ import annotations
 
 import json
 import logging
+import tempfile
 import time
 from collections.abc import Iterator
 from functools import lru_cache
+from pathlib import Path
 from typing import Any
 
 import httpx
 
-from app.config.settings import get_models_config, get_settings
+from app.config.settings import ConfigError, get_models_config, get_settings
 
 log = logging.getLogger("syncra.models")
 
@@ -224,3 +228,65 @@ def rerank(role: str, query: str, candidates: list[str]) -> list[float]:
     scores = model.predict([(query, c) for c in candidates], convert_to_numpy=True)
     _log_call(get_models_config()[role].name, started, items=len(candidates))
     return [float(s) for s in scores]
+
+
+# --- SetFit (classifiers we train) ----------------------------------------------------------
+
+
+def setfit_dir(role: str) -> Path:
+    return get_settings().trained_models_dir / role
+
+
+def train_setfit(role: str, texts: list[str], labels: list[str]) -> None:
+    """Fine-tune a SetFit classifier on the `<role>_base` body; save it to `setfit_dir(role)`."""
+    from datasets import Dataset
+    from setfit import SetFitModel, Trainer, TrainingArguments
+    from sklearn.linear_model import LogisticRegression
+
+    started = time.perf_counter()
+    # A fresh copy of the pinned body: training changes its weights, so not the cached one.
+    # (SetFitModel.from_pretrained would load the body ignoring the pinned revision.)
+    body = load_sentence_transformer.__wrapped__(f"{role}_base")
+    model = SetFitModel(model_body=body, model_head=LogisticRegression())
+    with tempfile.TemporaryDirectory() as checkpoints:
+        args = TrainingArguments(
+            output_dir=checkpoints,
+            num_iterations=5,  # pairs per example: as accurate as 20 on the triage data, 4x faster
+            report_to="none",
+            save_strategy="no",
+            logging_strategy="no",
+        )
+        dataset = Dataset.from_dict({"text": texts, "label": labels})
+        Trainer(model=model, args=args, train_dataset=dataset).train()
+    model.save_pretrained(setfit_dir(role))
+    load_setfit.cache_clear()
+    _log_call(f"setfit:{role}", started, items=len(texts))
+
+
+@lru_cache
+def load_setfit(role: str):  # noqa: ANN201 - heavy import kept lazy
+    """The trained classifier. Loaded by hand: SetFitModel.from_pretrained asks the Hub about it."""
+    import joblib
+    from sentence_transformers import SentenceTransformer
+    from setfit import SetFitModel
+
+    path = setfit_dir(role)
+    if not (path / "model_head.pkl").exists():
+        raise ConfigError(f"No trained {role} classifier in {path}: run `make train-{role}`")
+    started = time.perf_counter()
+    model = SetFitModel(
+        model_body=SentenceTransformer(str(path), device=device()),
+        model_head=joblib.load(path / "model_head.pkl"),  # pickle: only ever our own file
+    )
+    _log_call(f"setfit:{role}", started, loaded_on=device())
+    return model
+
+
+def classify(role: str, texts: list[str]) -> list[str]:
+    """One label per text from the SetFit classifier trained for `role`."""
+    if not texts:
+        return []
+    started = time.perf_counter()
+    labels = [str(label) for label in load_setfit(role).predict(texts)]
+    _log_call(f"setfit:{role}", started, items=len(texts))
+    return labels

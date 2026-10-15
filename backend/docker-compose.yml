@@ -17,6 +17,7 @@ x-backend: &backend
     OLLAMA_BASE_URL: http://ollama:11434
     DEVICE: ${DEVICE:-cpu}  # cuda only with an NVIDIA image + the GPU reservation below
     API_DOCS: "false"  # no public Swagger / OpenAPI in production
+    TRAINED_MODELS_DIR: /models/trained  # on the hf_models volume, so trained classifiers persist
   volumes:
     - hf_models:/models
   restart: unless-stopped

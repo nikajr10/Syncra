@@ -140,6 +140,12 @@ def test_incremental_sync_looks_back_for_new_replies_and_skips_stored_messages()
     assert not [m for m, _ in fake.calls if m == "conversations.replies"]
 
 
+def test_bot_messages_are_authored_by_the_bot_id() -> None:
+    bot = {"user": "U0BOTUSER", "bot_id": "B0CI", "text": "Build passed", "ts": LONE_TS}
+    assert SlackConnector._author(bot) == "slack:B0CI"  # triage drops slack:B... authors
+    assert SlackConnector._author({"user": "U1", "ts": LONE_TS}) == "slack:U1"
+
+
 def test_direct_messages_are_skipped() -> None:
     fake, sleeps = FakeSlack(), []
     items, cursor = _connector(fake, sleeps, channel="D42").fetch_new("1.000000")

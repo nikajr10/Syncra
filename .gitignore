@@ -6,4 +6,4 @@ __pycache__/
 .ruff_cache/
 .env
 .env.local
-
+trained_models/

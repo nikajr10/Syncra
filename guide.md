@@ -210,12 +210,15 @@ Start Ollama (open the **Ollama** app once, or run `ollama serve` in a separate 
 ```bash
 make pull-models        # Ollama LLMs: qwen3:4b and qwen3:8b   (~8 GB)
 make download-models    # Hugging Face models from config/models.yaml (embeddings, reranker, …)
+make train-triage       # trains the noise filter (~30 s), prints "Held-out accuracy: 9x.x%"
 ```
 
 - Models are listed in `backend/config/models.yaml`. Change models there, not in code.
 - `meta-llama/Llama-Prompt-Guard-2-86M` is **gated**: it needs a Hugging Face token, which you'll get later.
   Until then it's skipped (the script says so); the rest still download.
 - Downloads are big and slow — do this on good Wi-Fi. You only do it once.
+- `make train-triage` saves the noise filter in `backend/trained_models/` (not in git). Run it again
+  whenever `backend/config/triage.yaml` changes after a `git pull`.
 
 ---
 
@@ -256,6 +259,7 @@ git pull
 cd backend
 make install        # only if pyproject.toml changed (new packages)
 make migrate        # only if new migrations came in (safe to run anyway)
+make train-triage   # only if config/triage.yaml changed
 make run
 ```
 
@@ -277,6 +281,7 @@ Postgres (`brew services`) and Ollama keep running in the background.
 | Ollama errors / connection refused on 11434 | Start the Ollama app or `ollama serve` |
 | Port 8000 already in use | `lsof -i :8000` to find it, or run `.venv/bin/uvicorn app.api.main:app --reload --port 8001` |
 | Everything weird with packages | `rm -rf .venv && make install` |
+| `No trained triage classifier in …` | Run `make train-triage` |
 
 ---
 

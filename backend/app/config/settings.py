@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     ollama_timeout_seconds: float = 120.0
     hf_token: str | None = None  # only needed for gated Hugging Face models
     device: str = "auto"  # auto | cpu | mps | cuda — where Hugging Face models run
+    trained_models_dir: Path = BACKEND_DIR / "trained_models"  # classifiers we train (SetFit)
 
     # --- data sources (each optional until that connector is used) ---
     github_token: str | None = None

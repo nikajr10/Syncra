@@ -141,7 +141,8 @@ class SlackConnector:
 
     @staticmethod
     def _author(message: dict[str, Any]) -> str | None:
-        user = message.get("user") or message.get("bot_id")
+        # Apps post with a bot user (U...) and a bot id (B...): the bot id marks them for triage.
+        user = message.get("bot_id") or message.get("user")
         return f"slack:{user}" if user else None
 
     def _link(self, ts: str) -> str | None:

@@ -1,4 +1,4 @@
-.PHONY: install run worker test lint fmt pull-models download-models db-init migrate
+.PHONY: install run worker test lint fmt pull-models download-models train-triage db-init migrate
 
 PYTHON ?= python3.12
 
@@ -27,6 +27,9 @@ pull-models:
 
 download-models:
 	.venv/bin/python scripts/download_hf_models.py
+
+train-triage:
+	.venv/bin/python scripts/train_triage.py
 
 db-init:
 	.venv/bin/python scripts/init_local_db.py

@@ -5,10 +5,40 @@ Live record of what has been built. Agents add an entry here after every task (f
 ## Current status
 
 - **Current phase:** Phase 2 — Sort and split
-- **Next task:** 2.2 — SetFit triage model (2.3 Chunker can run in parallel)
-- **Completed tasks:** 0.1–0.6 (Phase 0 complete), 1.1–1.6 (Phase 1 complete), 2.1
+- **Next task:** 2.3 — Chunker
+- **Completed tasks:** 0.1–0.6 (Phase 0 complete), 1.1–1.6 (Phase 1 complete), 2.1, 2.2
 
 ## Log
+
+### Task 2.2 — SetFit triage model  ✅ done
+**Date:** 2026-10-15
+
+**Built**
+- Gateway: `train_setfit(role, texts, labels)` fine-tunes SetFit on the `<role>_base` body (pinned revision, fresh copy) with a logistic-regression head and saves it to `TRAINED_MODELS_DIR/<role>`; `load_setfit(role)` (cached) and `classify(role, texts)`.
+- `app/learning/triage.py`: `examples()` reads `config/triage.yaml`; `train()` trains on a stratified 80/20 split (seed 42) and returns held-out accuracy; `is_obvious_noise(item)` is the rule pre-filter (no text, or a bot author: `github:…[bot]`, `slack:B…`; bot-started threads still go to the classifier); `triage(items)` labels each item `useful` / `noise`; `triage_new_items(session)` sets noise items to status `noise` and returns the useful ones (still `new`) for the chunker.
+- `Item.full_text`: the title (unless the text already contains it), a blank line, then the text. Triage and the chunker read this.
+- `make train-triage` (`scripts/train_triage.py`) trains, prints the held-out accuracy and exits 1 below 90%. **Held-out accuracy: 98.3% (59/60)**, about 25 s on an M2 Pro (MPS).
+- Slack connector: bot messages are now authored `slack:<bot id>` (was the bot's user id), so the rule catches them.
+- Setting `TRAINED_MODELS_DIR` (default `backend/trained_models`, git-ignored; compose uses `/models/trained` on the `hf_models` volume). New dependency `setfit>=1.2`.
+- Tests: dataset; rules; queue marking with a fake classifier (rule-caught items never reach it, noise is skipped on the next run); one real training run into a temp dir (≥ 90% plus spot checks).
+
+**Key files**
+- `backend/app/learning/triage.py`, `backend/app/models/gateway.py`, `backend/scripts/train_triage.py`, `backend/tests/test_triage.py`
+
+**Decisions**
+- SetFit classifiers are addressed by role: `train_setfit("triage", …)` trains from `triage_base`. Task 5.5 reuses it: `train_setfit("intent_router", …)` and `classify("intent_router", texts)`.
+- Never use `SetFitModel.from_pretrained`: it ignores the pinned revision for the body and calls the Hub to fill in its model card. The gateway builds and loads models itself; `load_setfit` makes no network calls.
+- `num_iterations=5`: on this data it's as accurate as 20 iterations or SetFit's default oversampling (150 s), and 8x faster. A stronger body (bge-small, paraphrase-mpnet) didn't help; the data is the limit.
+- `triage` takes a list (one batched model call). Useful items keep status `new` until Task 4.4 marks them `processed`, so a second triage run re-checks them but never noise.
+- Bot authors: GitHub logins ending in `[bot]`, Slack ids starting with `B`. Jira automation has no marker; the classifier handles it.
+
+**How to run / test**
+- `make train-triage` · `make test` (the real training test adds about 20 s)
+
+**Known issues / TODO**
+- The worker doesn't triage yet. Task 4.4 wires it in; `load_setfit` raises a `ConfigError` ("run `make train-triage`") when the model is missing.
+- Accuracy depends on the split: 90–98% over five random splits (mean 95%). Almost all misses are automated notices kept as useful, which is the safe direction.
+- Existing Task 0.5 behaviour: loading a Hub model through `load_sentence_transformer` (also used for training here) makes one Hub metadata request (transformers lists chat templates), even when cached. It falls back to the cache when offline. Air-gapped hosts should set `HF_HUB_OFFLINE=1` after `make download-models`.
 
 ### Task 2.1 — Triage training data  ✅ done
 **Date:** 2026-10-15

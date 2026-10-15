@@ -130,6 +130,13 @@ class Item(Base):
     status: Mapped[str] = mapped_column(String(20), server_default=sqltext("'new'"))
     ingested_at: Mapped[datetime] = _created_at()
 
+    @property
+    def full_text(self) -> str:
+        """What triage and the chunker read: title (unless the text already has it), then text."""
+        if self.title and self.title not in self.text:
+            return f"{self.title}\n\n{self.text}".strip()
+        return self.text.strip()
+
 
 class Chunk(Base):
     __tablename__ = "chunks"
