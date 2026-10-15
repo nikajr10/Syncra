@@ -248,7 +248,7 @@ Live record of what has been built. Agents add an entry here after every task (f
 - **Do not start Docker locally.** Dev = local Postgres + native Ollama; Docker = production only. The compose Postgres was verified once (Postgres 17 + pgvector 0.8.7 came up with the extension enabled) and torn down; the image build has not been run.
 - Compose project name is pinned (`name: syncra`); the default (folder name `backend`) collided with another project's containers on the dev machine.
 - In containers the API / worker get `DATABASE_URL` and `OLLAMA_BASE_URL` pointing at the `postgres` / `ollama` services (set in compose), `DEVICE=cpu`, `HF_HOME=/models`.
-- DBeaver (local dev): host `localhost`, port `5434`, db `syncra`, user = macOS user, no password. Tests use `syncra_test` on the same server (`TEST_DATABASE_URL` in `.env`).
+- DBeaver (local dev): host `localhost`, port `5434`, db `syncra`, user = macOS user, no password. Tests use `syncra_test` on the same server (derived by `conftest.py`, not in `.env`).
 
 **How to run / test**
 - Local: `make db-init && make migrate && make pull-models && make download-models && make test`
@@ -278,7 +278,7 @@ Live record of what has been built. Agents add an entry here after every task (f
 - Models are addressed by role name (`entity_finder`, `decision_reader`, `embedder`, `entity_linker`, `triage_base`, `presidio_nlp`, `question_rewriter`, `prompt_guard`, `intent_router_base`, `reranker`, `answer_writer`, `claim_checker`). Change models in yaml, not code.
 - Ollama entries use the full tag as `name` (`qwen3:8b`); Hugging Face entries use the repo id, optional `revision`, `gated: true` when a token is needed.
 - Env vars beat `.env`; empty env values are ignored. Only `DATABASE_URL` is required.
-- Tests never touch the dev DB: `conftest.py` sets `DATABASE_URL` to `TEST_DATABASE_URL` (from the environment or `backend/.env`; fallback `postgresql+psycopg://<mac user>@localhost:5434/syncra_test`).
+- Tests never touch the dev DB: `conftest.py` sets `DATABASE_URL` to `<dev db>_test` on the same server (e.g. `syncra_test`) and creates it if missing. No test settings in `.env`, README or user docs — testing is agent-only (user decision 2026-10-15).
 
 **How to run / test**
 - `cd backend && make test`

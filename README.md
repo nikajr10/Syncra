@@ -13,8 +13,8 @@ Requires Python 3.12, PostgreSQL 16+ with the pgvector extension (Homebrew: `bre
 ```bash
 cd backend
 make install             # creates backend/.venv and installs the backend + dev tools
-cp .env.example .env     # set DATABASE_URL / TEST_DATABASE_URL to your Postgres (USER = your macOS user)
-make db-init             # creates the syncra + syncra_test databases and enables pgvector
+cp .env.example .env     # set DATABASE_URL to your Postgres (USER = your macOS user)
+make db-init             # creates the syncra database and enables pgvector
 make migrate             # creates the tables (alembic upgrade head)
 make pull-models         # ollama pull qwen3:4b + qwen3:8b
 make download-models     # downloads every Hugging Face model from config/models.yaml
@@ -28,7 +28,6 @@ Browse the database in DBeaver: host `localhost`, port `5434`, database `syncra`
 cd backend
 make run          # API on http://127.0.0.1:8000  (GET /health -> {"status": "ok"})
 make worker       # background job runner (every SYNC_INTERVAL_MINUTES)
-make test         # run the test suite (uses the syncra_test database)
 make lint         # ruff check + format check
 ```
 

@@ -1,15 +1,12 @@
-"""Create the local databases named in DATABASE_URL and TEST_DATABASE_URL and enable pgvector.
+"""Create the local database named in DATABASE_URL and enable pgvector.
 
 Usage (from backend/):  make db-init        (needs a running PostgreSQL with pgvector installed)
 """
 
-import os
-
 import psycopg
-from dotenv import dotenv_values
 from sqlalchemy.engine import make_url
 
-from app.config.settings import BACKEND_DIR, get_settings
+from app.config.settings import get_settings
 
 
 def ensure_database(url_str: str) -> None:
@@ -34,9 +31,4 @@ def ensure_database(url_str: str) -> None:
 
 
 if __name__ == "__main__":
-    env = {**dotenv_values(BACKEND_DIR / ".env"), **os.environ}
-    urls = [get_settings().database_url]
-    if env.get("TEST_DATABASE_URL"):
-        urls.append(env["TEST_DATABASE_URL"])
-    for u in urls:
-        ensure_database(u)
+    ensure_database(get_settings().database_url)

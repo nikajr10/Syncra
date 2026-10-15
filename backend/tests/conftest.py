@@ -1,7 +1,7 @@
 """Shared test setup.
 
-Tests must never touch the dev database, so DATABASE_URL is forced to the test database
-(TEST_DATABASE_URL from the environment or backend/.env) before any `app` module reads settings.
+Tests must never touch the dev database, so DATABASE_URL is forced to `<dev database>_test`
+(same server, created on first run) before any `app` module reads settings. Nothing to configure.
 """
 
 import getpass
@@ -10,13 +10,19 @@ from collections.abc import Iterator
 
 import pytest
 from dotenv import dotenv_values
+from sqlalchemy.engine import make_url
 
 from app.config.settings import BACKEND_DIR
+from scripts.init_local_db import ensure_database
 
 _env = {**dotenv_values(BACKEND_DIR / ".env"), **os.environ}
-os.environ["DATABASE_URL"] = _env.get("TEST_DATABASE_URL") or (
-    f"postgresql+psycopg://{getpass.getuser()}@localhost:5434/syncra_test"
+_dev = make_url(
+    _env.get("DATABASE_URL") or f"postgresql+psycopg://{getpass.getuser()}@localhost:5434/syncra"
 )
+os.environ["DATABASE_URL"] = _dev.set(database=f"{_dev.database}_test").render_as_string(
+    hide_password=False
+)
+ensure_database(os.environ["DATABASE_URL"])
 
 
 @pytest.fixture(scope="session")
