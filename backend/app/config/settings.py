@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     jira_base_url: str | None = None  # e.g. https://acme.atlassian.net
     jira_email: str | None = None
     jira_api_token: str | None = None
+    slack_bot_token: str | None = None
+    slack_workspace_url: str | None = None  # e.g. https://acme.slack.com (for message links)
+    slack_api_url: str = "https://slack.com/api"
+    slack_thread_lookback_days: int = 7  # re-scan this far back for new replies on old threads
 
     # --- key numbers (description.md §9) ---
     sync_interval_minutes: int = 15
