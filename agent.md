@@ -26,8 +26,9 @@ Syncra is a team-memory chatbot. A **learning pipeline** (offline, every 15 min)
 ## 3. Current state of the repo
 
 - Planning docs are written: `description.md`, `phases.md`, `agent.md`, `progress.md`.
-- **The Python project lives at the repo root** (decided in Task 0.1): package `syncra/`, yaml in `config/`, `tests/`, `scripts/`, `pyproject.toml`, `Makefile`. Commands: `make install`, `make run`, `make test`, `make lint`.
-- The existing `backend/` and `frontend/` folders are an **old, empty scaffold** (all files are 0 bytes) and are **dead**. Do not put code there. Delete them with `git rm -r backend frontend/hello.txt` when allowed.
+- **The Python project lives in `backend/`** (decided in Task 0.1): package `backend/app/`, yaml in `backend/config/`, `backend/tests/`, `backend/scripts/`, `backend/pyproject.toml`, `backend/Makefile`. Commands (from `backend/`): `make install`, `make run`, `make test`, `make lint`.
+- `frontend/` is reserved for the web app (Phase 9); it only holds a placeholder today.
+- The old empty scaffold that used to live in `backend/` was deleted in Task 0.1.
 
 > Keep this section up to date when something big changes (e.g. layout decided, stack chosen).
 
