@@ -443,7 +443,7 @@ flowchart LR
 - [x] 0.3 Configuration
 - [x] 0.4 Database schema and migrations
 - [x] 0.5 Model gateway
-- [ ] 0.6 Background job runner
+- [x] 0.6 Background job runner
 
 **Phase 1 — Collect and clean**
 - [ ] 1.1 Connector interface
