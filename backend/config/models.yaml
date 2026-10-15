@@ -1,0 +1,50 @@
+# Every model Syncra uses, by role (see description.md §8).
+#
+#   runtime: ollama      -> name is the Ollama tag ("qwen3:8b"); pulled by scripts/pull_ollama_models.py
+#   runtime: huggingface -> name is the Hugging Face repo id; revision pins a git revision (default main);
+#                           downloaded by scripts/download_hf_models.py
+#   runtime: spacy       -> spaCy pipeline used by Presidio (installed with pip)
+#
+# Change a model here, not in code. Everything runs locally.
+
+models:
+  # --- Learning pipeline ---
+  entity_finder: # GLiNER: people, services, tools, projects
+    runtime: huggingface
+    name: urchade/gliner_small-v2.1
+  decision_reader: # Qwen3: thread/PR -> {decision, reason, people}
+    runtime: ollama
+    name: qwen3:8b
+  embedder: # Qwen3-Embedding: chunk -> 1024-dim vector (embedding_dim in settings must match)
+    runtime: huggingface
+    name: Qwen/Qwen3-Embedding-0.6B
+  entity_linker: # SBERT: merge same entity under different names
+    runtime: huggingface
+    name: sentence-transformers/all-MiniLM-L6-v2
+  triage_base: # SetFit body for useful-vs-noise (trained head saved locally by Task 2.2)
+    runtime: huggingface
+    name: sentence-transformers/all-MiniLM-L6-v2
+  presidio_nlp: # spaCy pipeline Presidio runs on
+    runtime: spacy
+    name: en_core_web_sm
+
+  # --- Chatbot pipeline ---
+  question_rewriter: # Qwen3 4B: follow-up -> standalone question
+    runtime: ollama
+    name: qwen3:4b
+  prompt_guard: # Meta Prompt Guard 2 (gated: needs HF_TOKEN + accepted licence)
+    runtime: huggingface
+    name: meta-llama/Llama-Prompt-Guard-2-86M
+    gated: true
+  intent_router_base: # SetFit body for small_talk / question / action (trained head saved by Task 5.5)
+    runtime: huggingface
+    name: sentence-transformers/all-MiniLM-L6-v2
+  reranker: # cross-encoder: scores evidence, keeps best 8
+    runtime: huggingface
+    name: cross-encoder/ms-marco-MiniLM-L-6-v2
+  answer_writer: # Qwen3 8B: evidence + history -> cited answer
+    runtime: ollama
+    name: qwen3:8b
+  claim_checker: # DeBERTa NLI: checks each claim against its evidence
+    runtime: huggingface
+    name: cross-encoder/nli-deberta-v3-base

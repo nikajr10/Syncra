@@ -440,7 +440,7 @@ flowchart LR
 **Phase 0 — Foundation**
 - [x] 0.1 Project skeleton
 - [ ] 0.2 Local services with Docker
-- [ ] 0.3 Configuration
+- [x] 0.3 Configuration
 - [ ] 0.4 Database schema and migrations
 - [ ] 0.5 Model gateway
 - [ ] 0.6 Background job runner
