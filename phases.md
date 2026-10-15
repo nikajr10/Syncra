@@ -456,7 +456,7 @@ flowchart LR
 **Phase 2 — Sort and split**
 - [x] 2.1 Triage training data
 - [x] 2.2 SetFit triage model
-- [ ] 2.3 Chunker
+- [x] 2.3 Chunker
 
 **Phase 3 — Understand**
 - [ ] 3.1 Entity finder (GLiNER)

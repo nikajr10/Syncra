@@ -4,11 +4,34 @@ Live record of what has been built. Agents add an entry here after every task (f
 
 ## Current status
 
-- **Current phase:** Phase 2 — Sort and split
-- **Next task:** 2.3 — Chunker
-- **Completed tasks:** 0.1–0.6 (Phase 0 complete), 1.1–1.6 (Phase 1 complete), 2.1, 2.2
+- **Current phase:** Phase 3 — Understand
+- **Next task:** 3.1 — Entity finder (GLiNER) (3.2 Decision reader prompt and 3.4 Embedder can run in parallel)
+- **Completed tasks:** 0.1–0.6 (Phase 0 complete), 1.1–1.6 (Phase 1 complete), 2.1–2.3 (Phase 2 complete)
 
 ## Log
+
+### Task 2.3 — Chunker  ✅ done
+**Date:** 2026-10-15
+
+**Built**
+- `app/learning/chunk.py`: `chunk_item(item)` cuts `item.full_text` (title + text) into chunks of at most `CHUNK_SIZE` characters (default 1500, about 375 tokens). Each chunk repeats up to `CHUNK_OVERLAP` characters (default 200) from the end of the previous one. `TextChunk` keeps `item_id`, `position`, `text`, `link`, `author`, `created_at`, `access_tags`.
+- Pieces before packing: a Slack thread message (a `slack:<id>: …` line, Task 1.4 format) or a fenced code block stays whole when it fits in a chunk. Other text is cut at line breaks and sentence ends, a sentence longer than a chunk at spaces, and a single huge word by characters. The overlap is made of whole pieces, so a code block or message is never half-repeated.
+- Settings `CHUNK_SIZE`, `CHUNK_OVERLAP` (characters).
+- Tests: long text (sizes, overlap, nothing lost), code blocks (kept whole; an oversized one cut only between lines), very short and empty text, a Slack thread (every message whole and in order, including a multi-line one with code), item details carried over.
+
+**Key files**
+- `backend/app/learning/chunk.py`, `backend/tests/test_chunk.py`
+
+**Decisions**
+- Sizes are in characters, not tokens: no tokenizer to load, and Qwen3-Embedding's window (32k tokens) is far bigger than 1500 characters. Retrieval precision sets the size, not the window.
+- The chunker is pure (no DB writes). Task 4.3 stores chunks in `chunks` (`item_id`, `position`, `text`, `vector`); link, author, time and permissions stay on `items` and are joined from there.
+- A code block bigger than a chunk is cut between lines. Otherwise a pasted 50 KB log would become one huge chunk for the embedder and the answer prompt.
+
+**How to run / test**
+- `make test`
+
+**Known issues / TODO**
+- A chunk's `created_at` is its item's creation time; for a Slack thread that is the first message, not the latest reply.
 
 ### Task 2.2 — SetFit triage model  ✅ done
 **Date:** 2026-10-15

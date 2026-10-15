@@ -58,6 +58,10 @@ class Settings(BaseSettings):
     top_k_evidence: int = 8
     embedding_dim: int = 1024
 
+    # --- chunker, in characters (~4 per token, well inside the embedder's window) ---
+    chunk_size: int = 1500
+    chunk_overlap: int = 200
+
     # --- misc ---
     log_level: str = "INFO"
     api_docs: bool = False  # /docs, /redoc, /openapi.json; off unless set (local dev turns it on)
