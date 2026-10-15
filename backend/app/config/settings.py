@@ -40,6 +40,13 @@ class Settings(BaseSettings):
     hf_token: str | None = None  # only needed for gated Hugging Face models
     device: str = "auto"  # auto | cpu | mps | cuda — where Hugging Face models run
 
+    # --- data sources (each optional until that connector is used) ---
+    github_token: str | None = None
+    github_api_url: str = "https://api.github.com"
+    jira_base_url: str | None = None  # e.g. https://acme.atlassian.net
+    jira_email: str | None = None
+    jira_api_token: str | None = None
+
     # --- key numbers (description.md §9) ---
     sync_interval_minutes: int = 15
     chat_memory_turns: int = 10
