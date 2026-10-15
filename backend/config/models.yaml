@@ -24,6 +24,7 @@ models:
   decision_reader: # Qwen3: thread/PR -> {decision, reason, people}
     runtime: ollama
     name: qwen3:8b
+    prompt: decision_reader.v1  # config/prompts/decision_reader.v1.yaml
   embedder: # Qwen3-Embedding: chunk -> 1024-dim vector (embedding_dim in settings must match)
     runtime: huggingface
     name: Qwen/Qwen3-Embedding-0.6B

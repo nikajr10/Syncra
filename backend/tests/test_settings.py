@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -8,6 +9,7 @@ from app.config.settings import (
     ModelsConfig,
     Settings,
     get_models_config,
+    get_prompt,
     get_settings,
 )
 
@@ -80,3 +82,25 @@ def test_invalid_models_yaml_is_a_config_error(tmp_path: Path) -> None:
         get_models_config(bad)
     assert (CONFIG_DIR / "models.yaml").exists()
     assert isinstance(ModelsConfig.model_validate({"models": {}}), ModelsConfig)
+
+
+def test_decision_reader_prompt_is_a_versioned_file_chosen_in_config(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    spec = get_models_config()["decision_reader"]
+    assert spec.prompt == "decision_reader.v1"
+    prompt = get_prompt("decision_reader")
+    assert "$entities" in prompt.prompt and "$thread" in prompt.prompt
+    answers = [json.loads(line) for line in prompt.system.splitlines() if line.startswith("{")]
+    assert 2 <= len(answers) <= 3  # worked examples, each answered with the output JSON
+    assert all(set(answer) == {"decision", "reason", "people"} for answer in answers)
+
+    monkeypatch.setattr(spec, "prompt", "decision_reader.v0")
+    get_prompt.cache_clear()
+    try:
+        with pytest.raises(ConfigError, match="decision_reader.v0"):
+            get_prompt("decision_reader")
+    finally:
+        get_prompt.cache_clear()
+    with pytest.raises(ConfigError, match="No prompt"):
+        get_prompt("embedder")

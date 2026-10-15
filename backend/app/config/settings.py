@@ -1,8 +1,9 @@
 """Single place all configuration is loaded from.
 
-Two sources:
+Sources:
 - `backend/.env` / environment variables -> `Settings` (secrets, URLs, numbers).
 - `config/models.yaml` -> `ModelsConfig` (every model Syncra uses).
+- `config/prompts/<name>.yaml` -> `Prompt` (versioned LLM prompts; models.yaml picks one per role).
 
 Environment variables always win over `.env`. Required settings that are missing
 raise `ConfigError` with a message naming each missing field.
@@ -75,6 +76,7 @@ class ModelSpec(BaseModel):
     files: list[str] | None = None  # Hugging Face: download only these (glob patterns)
     labels: list[str] = []  # GLiNER: entity types to look for
     threshold: float = 0.5  # GLiNER: drop hits scoring lower
+    prompt: str | None = None  # Ollama: config/prompts/<prompt>.yaml, versioned by name (".v1")
 
 
 class ModelsConfig(BaseModel):
@@ -85,6 +87,11 @@ class ModelsConfig(BaseModel):
             return self.models[role]
         except KeyError as exc:
             raise ConfigError(f"No model configured for role '{role}' in models.yaml") from exc
+
+
+class Prompt(BaseModel):
+    system: str  # the system prompt
+    prompt: str  # string.Template; the step fills its $placeholders
 
 
 def _format_validation_error(exc: ValidationError) -> str:
@@ -118,3 +125,18 @@ def get_models_config(path: Path = CONFIG_DIR / "models.yaml") -> ModelsConfig:
         raise ConfigError(
             f"Invalid models config {path}:\n{_format_validation_error(exc)}"
         ) from exc
+
+
+@lru_cache
+def get_prompt(role: str) -> Prompt:
+    """The prompt file the role's `prompt` names in models.yaml: config/prompts/<prompt>.yaml."""
+    name = get_models_config()[role].prompt
+    if not name:
+        raise ConfigError(f"No prompt configured for role '{role}' in models.yaml")
+    path = CONFIG_DIR / "prompts" / f"{name}.yaml"
+    try:
+        return Prompt.model_validate(yaml.safe_load(path.read_text()))
+    except FileNotFoundError as exc:
+        raise ConfigError(f"Prompt file not found: {path}") from exc
+    except ValidationError as exc:
+        raise ConfigError(f"Invalid prompt file {path}:\n{_format_validation_error(exc)}") from exc
