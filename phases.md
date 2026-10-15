@@ -462,7 +462,7 @@ flowchart LR
 - [x] 3.1 Entity finder (GLiNER)
 - [x] 3.2 Decision reader prompt
 - [x] 3.3 Decision reader step
-- [ ] 3.4 Embedder
+- [x] 3.4 Embedder
 
 **Phase 4 — Link and store**
 - [ ] 4.1 Entity linking (SBERT)

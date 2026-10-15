@@ -4,11 +4,31 @@ Live record of what has been built. Agents add an entry here after every task (f
 
 ## Current status
 
-- **Current phase:** Phase 3 — Understand
-- **Next task:** 3.4 — Embedder
-- **Completed tasks:** 0.1–0.6 (Phase 0 complete), 1.1–1.6 (Phase 1 complete), 2.1–2.3 (Phase 2 complete), 3.1–3.3
+- **Current phase:** Phase 4 — Link and store
+- **Next task:** 4.1 — Entity linking (SBERT) (4.3 Search indexes can run in parallel; Phase 5 can start any time)
+- **Completed tasks:** 0.1–0.6 (Phase 0 complete), 1.1–1.6 (Phase 1 complete), 2.1–2.3 (Phase 2 complete), 3.1–3.4 (Phase 3 complete)
 
 ## Log
+
+### Task 3.4 — Embedder  ✅ done
+**Date:** 2026-10-15
+
+**Built**
+- `app/learning/embed.py`: `embed_chunks(chunks)` returns one vector per chunk, in order, through `gateway.embed("embedder", …)` (Qwen3-Embedding-0.6B via sentence-transformers, batches of 32, normalised). Vectors that aren't `EMBEDDING_DIM` long raise a `ConfigError` before anything is stored.
+- Tests (real model): vectors are 1024 long and unit length; a paraphrase scores more than 0.2 higher than an unrelated sentence; no chunks give no vectors; a wrong `EMBEDDING_DIM` fails clearly.
+
+**Key files**
+- `backend/app/learning/embed.py`, `backend/tests/test_embed.py`
+
+**Decisions**
+- Chunks are embedded as documents (no instruction prompt). Questions (Task 6.2) must use the model's `query` prompt (`encode(q, prompt_name="query")` adds "Instruct: Given a web search query, retrieve relevant passages…"). `gateway.embed` needs a `prompt_name` argument for that.
+- transformers 5 loads Qwen3-Embedding in its checkpoint dtype, bf16, so vectors are unit length only to within ~3e-3. Cosine search is unaffected.
+
+**How to run / test**
+- `make test` (loading the 0.6B model adds about 10 s)
+
+**Known issues / TODO**
+- bf16 may be slow on a CPU without bf16 support (production `DEVICE=cpu`). Measure in Task 10.4 and load in float32 if it is.
 
 ### Task 3.3 — Decision reader step  ✅ done
 **Date:** 2026-10-15
