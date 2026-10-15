@@ -5,10 +5,31 @@ Live record of what has been built. Agents add an entry here after every task (f
 ## Current status
 
 - **Current phase:** Phase 4 — Link and store
-- **Next task:** 4.3 — Search indexes (Phase 5 can start any time)
-- **Completed tasks:** 0.1–0.6 (Phase 0 complete), 1.1–1.6 (Phase 1 complete), 2.1–2.3 (Phase 2 complete), 3.1–3.4 (Phase 3 complete), 4.1–4.2
+- **Next task:** 4.4 — Learning pipeline orchestration (Phase 5 can start any time)
+- **Completed tasks:** 0.1–0.6 (Phase 0 complete), 1.1–1.6 (Phase 1 complete), 2.1–2.3 (Phase 2 complete), 3.1–3.4 (Phase 3 complete), 4.1–4.3
 
 ## Log
+
+### Task 4.3 — Search indexes  ✅ done
+**Date:** 2026-10-15
+
+**Built**
+- `app/learning/index.py`: `save_chunks(session, item_ids, chunks, vectors) -> [Chunk]` replaces the chunks of those items with the new chunks and their vectors, and flushes so the rows have ids (the graph's `mentions` links need them). Saving a row is indexing it: `chunks.vector` is in the pgvector HNSW index (cosine) and `chunks.tsv` (generated from the text) in the GIN full-text index, both from migration 0001.
+- Tests: three items (a PR, a Jira issue, a Slack message) chunked, embedded with the real embedder and saved. A raw `ORDER BY vector <=> :q` query with a paraphrased question returns the PR's chunk, and a raw `tsv @@ websearch_to_tsquery(...)` query for "refunds" returns the Jira chunk (stemmed from "refund"). With `enable_seqscan` off, `EXPLAIN` shows each query using `ix_chunks_vector_hnsw` / `ix_chunks_tsv`. Saving again replaces instead of duplicating, and saving no chunks for an item removes its old ones.
+
+**Key files**
+- `backend/app/learning/index.py`, `backend/tests/test_index.py`
+
+**Decisions**
+- An item's chunks are always replaced as a whole (delete, then insert), so chunk ids change when an item is reprocessed. Nothing may keep chunk ids across learning runs: graph links to chunks are rewritten in the same transaction (Task 4.2), and chat history (Phase 7) should store links and text, not chunk ids.
+- Search queries must use the operators the indexes were built for: `<=>` (cosine, `vector_cosine_ops`) for vectors, and `tsv @@ <tsquery built with the 'english' config>` for keywords.
+- No index tuning here (HNSW `m=16`, `ef_construction=64`, default `ef_search=40`); Task 10.4 measures it.
+
+**How to run / test**
+- `make test`
+
+**Known issues / TODO**
+- The 'english' config splits and stems identifiers: `retry_limit` is stored as `retri` + `limit`, `PAY-1234` as `pay` + `-1234`. Ticket ids still match exactly through `websearch_to_tsquery` (it builds the phrase `'pay' <-> '-1234'`; `PAY-1235` doesn't match), but `retry_limit` also matches `retry limits`. Task 6.3 decides whether that is good enough.
 
 ### Task 4.2 — Knowledge graph writer  ✅ done
 **Date:** 2026-10-15
