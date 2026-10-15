@@ -80,7 +80,7 @@ class ModelSpec(BaseModel):
     gated: bool = False  # needs HF_TOKEN + accepted licence
     files: list[str] | None = None  # Hugging Face: download only these (glob patterns)
     labels: list[str] = []  # GLiNER: entity types to look for
-    threshold: float = 0.5  # GLiNER: drop hits scoring lower
+    threshold: float = 0.5  # GLiNER: drop hits scoring lower; entity_linker: merge names this alike
     prompt: str | None = None  # Ollama: config/prompts/<prompt>.yaml, versioned by name (".v1")
 
 

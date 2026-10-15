@@ -33,6 +33,10 @@ models:
     runtime: huggingface
     name: sentence-transformers/all-MiniLM-L6-v2
     revision: 1110a243fdf4706b3f48f1d95db1a4f5529b4d41  # pinned commit; bump deliberately
+    # Names at least this similar are one entity. Measured on this model: real variants 0.90-0.97
+    # (postgres/postgresql 0.899 just misses), different things up to 0.86 (internal/external
+    # api); version pairs (billing v1/v2, 0.90) are kept apart by their numbers, not by this.
+    threshold: 0.9
   triage_base: # SetFit body for useful-vs-noise (trained head saved locally by Task 2.2)
     runtime: huggingface
     name: sentence-transformers/all-MiniLM-L6-v2

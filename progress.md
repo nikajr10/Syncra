@@ -5,10 +5,44 @@ Live record of what has been built. Agents add an entry here after every task (f
 ## Current status
 
 - **Current phase:** Phase 4 — Link and store
-- **Next task:** 4.1 — Entity linking (SBERT) (4.3 Search indexes can run in parallel; Phase 5 can start any time)
-- **Completed tasks:** 0.1–0.6 (Phase 0 complete), 1.1–1.6 (Phase 1 complete), 2.1–2.3 (Phase 2 complete), 3.1–3.4 (Phase 3 complete)
+- **Next task:** 4.2 — Knowledge graph writer (4.3 Search indexes can run in parallel; Phase 5 can start any time)
+- **Completed tasks:** 0.1–0.6 (Phase 0 complete), 1.1–1.6 (Phase 1 complete), 2.1–2.3 (Phase 2 complete), 3.1–3.4 (Phase 3 complete), 4.1
 
 ## Log
+
+### Task 4.1 — Entity linking (SBERT)  ✅ done
+**Date:** 2026-10-15
+
+**Built**
+- `app/learning/link.py`:
+  - `key(name)`: the normalised name every spelling of one thing shares. camelCase and separators are split, text is lower-cased, `svc` / `k8s` / `db` are expanded and plural `s` is dropped, so `PaymentService`, `payment-service` and `payments-svc` all become `paymentservice`.
+  - `link_entities(session, found) -> {(name, type): entity id}`: a name with a known key goes to that entity. Otherwise SBERT (`entity_linker`, all-MiniLM-L6-v2) compares it with every existing name: at least `threshold` (0.9) similar and with the same numbers → that entity, else a new one. Every name becomes an alias (`source_kind` NULL). Services, tools and projects link across those types (GLiNER mixes them up; the first type seen wins). People link only to people, by exact key, never by SBERT.
+  - `link_people(session, accounts) -> {account: entity id}`: the person entity of each item author, decision person or mention, found by its account alias (`github:alice`, with `source_kind` = the source). A new account gets a person entity named after it.
+  - `link_identities(session)`: for each Syncra user, merges the person entities of the accounts they linked (`user_source_identities`) and of people known only by their display name, then adds every account and display name as an alias. A merge moves aliases and edges to the oldest entity and deletes the others.
+- `find_entities` now also reports Slack mentions (`<@U03>`, `<@U03|maria>`) as people named `slack:U03` (score 1.0), so they link to that account's person.
+- `entity_linker.threshold: 0.9` in models.yaml. `numpy` is declared as a dependency (it was already installed with sentence-transformers).
+- Tests: the three names become one entity with three aliases, found again later by key and by SBERT ("payment processing service", 0.92); payment / billing / notification service and billing-v1 / v2 stay separate; RabbitMQ as a tool and as a service is one entity, "Jordan" the project and "Jordan" the person are two; accounts are merged through identities (aliases, a name-only person absorbed, edges moved, no stale ORM objects); Slack mentions become people.
+
+**Key files**
+- `backend/app/learning/link.py`, `backend/app/learning/entities.py`, `backend/config/models.yaml`, `backend/tests/test_link.py`
+
+**Decisions**
+- Normalisation does the heavy lifting, because SBERT on short names is a weak signal. Measured with all-MiniLM-L6-v2: `payments svc` vs `payment service` scores 0.59, while different things score higher: `payment service` vs `billing service` 0.79, `frontend` vs `backend` 0.82, `internal api` vs `external api` 0.86, and version pairs (`billing v1` / `v2`, `api v1` / `v2`) 0.90. So the key expands `svc` and drops plurals, the threshold is 0.9, and names with different numbers never merge.
+- False merges are worse than missed ones (a merge mixes two things' people and decisions), so the threshold is conservative: `postgres` / `postgresql` (0.899) and typos stay separate entities.
+- Aliases with a `source_kind` are accounts (`github:alice`, `slack:U01`, `jira:<accountId>`); aliases without one are names. Name matching never looks at accounts.
+- An account becomes a person without any Syncra user. Accounts in different tools are linked only through `user_source_identities` (filled by Tasks 5.1 / 9.4); `link_identities` must run after identities change (Task 4.4 runs it on every learning run).
+- A person entity's `name` is the first identifier seen (an account or a name). Display names are aliases, so readable names for answers come from the aliases (Phases 6 / 7).
+- `link.key()` is the normalised-name contract: anything that matches text against aliases (Task 4.2 "about" links, Task 6.4 entities in questions) should compare keys.
+- SBERT vectors of names are cached for the process; `link_entities` loads all name aliases once per call.
+- `_merge` rewrites rows with SQL, so `link_identities` expires the session afterwards; a test holds an edge object across a merge to keep that true.
+
+**How to run / test**
+- `make test`
+
+**Known issues / TODO**
+- Two people with the same display name: a mention of that name links to the older one.
+- First names (`Maria`) don't link to full names (`Maria Garcia`). GitHub `@login` mentions are not extracted (code decorators look the same).
+- The connectors don't fetch Slack or GitHub display names, so people without a Syncra user are known only by their account id.
 
 ### Task 3.4 — Embedder  ✅ done
 **Date:** 2026-10-15
