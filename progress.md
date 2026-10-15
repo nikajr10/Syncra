@@ -5,10 +5,34 @@ Live record of what has been built. Agents add an entry here after every task (f
 ## Current status
 
 - **Current phase:** Phase 2 — Sort and split
-- **Next task:** 2.1 — Triage training data (2.3 Chunker can run in parallel)
-- **Completed tasks:** 0.1–0.6 (Phase 0 complete), 1.1–1.6 (Phase 1 complete)
+- **Next task:** 2.2 — SetFit triage model (2.3 Chunker can run in parallel)
+- **Completed tasks:** 0.1–0.6 (Phase 0 complete), 1.1–1.6 (Phase 1 complete), 2.1
 
 ## Log
+
+### Task 2.1 — Triage training data  ✅ done
+**Date:** 2026-10-15
+
+**Built**
+- `config/triage.yaml`: 299 hand-written examples, 151 `useful` / 148 `noise`. The two top-level keys are the labels.
+- Each example is what triage reads for one item: the title (when the text doesn't already contain it), a blank line, then the text, scrubbed, in the connectors' formats. Every item type is covered: PRs, issues, commits, reviews, inline review comments, Jira issues and comments, Slack messages and threads.
+- Noise: thanks / +1 / emoji-only replies, CI and bot chatter (Codecov, Dependabot / Renovate, stale bots, Jira automation, CLA checks), trivial commits, nits, pings, social chat, junk tickets.
+- Useful includes deliberate look-alikes: approving reviews however short (`approved: lgtm`), "+1 to RabbitMQ: <reason>", dependency pins with a reason, Jira tickets with no description.
+- Test: both labels present and balanced (each ≥ 40%), 100–300 examples, all non-empty strings, no duplicates.
+
+**Key files**
+- `backend/config/triage.yaml`, `backend/tests/test_triage.py`
+
+**Decisions**
+- Reviews that approve or request changes are **useful** even with an empty body: they are the only record of who reviewed what (Task 4.2 `reviewed` links).
+- A bot-started Slack thread with human replies is useful; only bot messages on their own are noise.
+- Quote YAML examples that contain `: ` or ` #`, otherwise YAML reads a dict or cuts the text at a comment.
+
+**How to run / test**
+- `make test`
+
+**Known issues / TODO**
+- All examples are synthetic. When real items get misclassified, add them here and retrain (Task 2.2).
 
 ### Security pass (not a phase task)  ✅ done
 **Date:** 2026-10-15

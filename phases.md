@@ -454,7 +454,7 @@ flowchart LR
 - [x] 1.6 Scheduled sync job
 
 **Phase 2 — Sort and split**
-- [ ] 2.1 Triage training data
+- [x] 2.1 Triage training data
 - [ ] 2.2 SetFit triage model
 - [ ] 2.3 Chunker
 

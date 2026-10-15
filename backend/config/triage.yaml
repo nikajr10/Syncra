@@ -1,0 +1,708 @@
+# Triage training data (Task 2.1): which items are worth learning from.
+#
+# The two top-level keys are the labels; `make train-triage` trains the SetFit classifier on them
+# (Task 2.2). Each example is the text triage reads for one item: the title (when the text doesn't
+# already contain it), a blank line, then the text, exactly as the connectors store them (already
+# scrubbed, so secrets show up as <AWS_ACCESS_KEY> etc.). Slack threads are "slack:<id>: text"
+# lines. Keep both labels about the same size, and retrain after editing.
+#
+#   useful  knowledge: what was built, decided, owned, broken or fixed, and why. Reviews that
+#           approve or request changes count however short: they record who reviewed what.
+#   noise   thanks / +1 / emoji-only replies, CI and bot chatter, trivial commits, pings,
+#           social chat.
+
+useful:
+  # --- GitHub pull requests and issues ---
+  - |-
+    Add queue between checkout and payments
+
+    The payment provider times out under load (p99 above 8 s), which fails checkout. This puts a RabbitMQ queue in front of payment-service so checkout returns right away and a worker processes the payments.
+
+    Closes PAY-1234.
+  - |-
+    Move billing from REST to gRPC
+
+    JSON payloads between billing and ledger are about 4x larger than the proto equivalents and parsing shows up in every flame graph. This switches the billing to ledger calls to gRPC. The REST endpoints stay for one release for old clients.
+  - |-
+    Cap payment retries at 3
+
+    We retried failed charges up to 10 times, which hammered the provider during Tuesday's outage. Three retries with exponential backoff cover every transient error we saw in the last 90 days.
+  - |-
+    Add idempotency keys to charge requests
+
+    A retry after a timeout could double-charge a customer because the provider saw two separate requests. Every charge now sends an Idempotency-Key derived from the order id.
+  - |-
+    Fix flaky checkout integration test
+
+    The test raced the payment worker. It now waits for the order to reach PAID instead of sleeping for 2 seconds.
+  - |-
+    Switch auth from JWT to server-side sessions
+
+    We couldn't revoke JWTs when an account was locked. Sessions now live in Redis with a 12 h TTL; logout and lockout delete them.
+  - |-
+    Remove the legacy v1 payments API
+
+    No traffic on /v1/charges for 60 days (checked the access logs). Deleting the handlers and the old serializers.
+  - |-
+    Rate limit the login endpoint
+
+    5 attempts per minute per IP and per account, using the Redis we already run. The brute-force attempts from last week's incident would have been stopped after the fifth try.
+  - |-
+    Upgrade Postgres from 14 to 16
+
+    Needed for the logical replication fixes. Ran the upgrade on a copy of prod: 6 minutes of downtime and all queries pass.
+  - |-
+    Split notification-service out of the monolith
+
+    Email and SMS sending have their own release cadence and kept blocking monolith deploys. The new service consumes the existing events topic, so no API changes.
+  - |-
+    Add circuit breaker around the fraud check
+
+    When the fraud API is down we now fail open for orders under $50 and fail closed above that, as agreed with the risk team.
+  - |-
+    Cache exchange rates for 5 minutes
+
+    Every checkout called the FX provider and we paid for about 2M calls a day. Rates are now cached in Redis for 5 minutes, which finance confirmed is fine.
+  - |-
+    Add Grafana dashboard for the payment queue
+
+    Shows queue depth, consumer lag and failed messages. Linked from the payments runbook.
+  - |-
+    Document the refund flow
+
+    Adds docs/refunds.md: how partial refunds work, which service owns which step, and how to replay a failed refund.
+  - |-
+    Use the shared HTTP client in fraud-service
+
+    It had its own client without timeouts, which is how the fraud outage took checkout down with it.
+  - |-
+    Add CODEOWNERS for payments
+
+    Changes under services/payments now need a review from the payments team.
+  - Add partial refund endpoint
+  - |-
+    Checkout fails with 504 when the payment provider is slow
+
+    Since Monday about 2% of checkouts fail with a gateway timeout. Logs show the provider call taking 30 s or more. We need a timeout and a retry policy.
+  - |-
+    Webhook signatures fail after secret rotation
+
+    After rotating the webhook secret, merchants on SDK versions below 3.1 get signature errors because the SDK caches the old secret for 24 hours.
+  - |-
+    Memory leak in notification-service
+
+    RSS grows about 200 MB a day until the pod is OOM-killed. The heap dump points at the template cache, which never evicts anything.
+  - |-
+    Support partial refunds
+
+    Finance needs partial refunds for damaged-item claims. Today support issues a full refund and charges again, which confuses customers.
+  - |-
+    Add audit log for admin actions
+
+    Compliance needs a record of who changed refund limits and when. Store it in Postgres and keep it for 7 years.
+  - |-
+    Document how to rotate the webhook secret
+
+    Nobody remembered the steps last time and the rotation took 2 hours. We need a runbook.
+  - |-
+    Move secrets from env files to the secrets manager
+
+    All services read credentials from Vault now. The .env files only hold non-secret config.
+  - |-
+    Search returns deleted products
+
+    The search index isn't updated on delete; the nightly reindex is the only thing that removes them.
+  - |-
+    Add dead-letter queue for failed payments
+
+    Messages that fail 3 times go to payments.dlq instead of being dropped. On-call gets an alert when it's not empty.
+  - |-
+    Settlement report misses refunds
+
+    Refunds created on the last day of the month are counted in the next month's report.
+
+  # --- commits ---
+  - |-
+    Use exponential backoff for webhook delivery
+
+    Fixed 1 s retries overloaded merchant endpoints while they were down.
+  - |-
+    Fix race in order status update
+
+    Two workers could mark the same order PAID and SHIPPED out of order. The update now checks the current status in the WHERE clause.
+  - |-
+    Raise ledger client timeout from 2s to 5s
+
+    Ledger p99 is 3.1 s since the October migration, so the 2 s timeout was failing 4% of writes.
+  - |-
+    Drop the unused coupons table
+
+    Coupons moved to the promotions service in March and nothing reads this table anymore (checked pg_stat_user_tables).
+  - |-
+    Log the provider request id on every charge
+
+    Support needs it to trace disputes with the provider.
+  - |-
+    Encrypt card fingerprints at rest
+
+    PCI audit finding #7. Uses the existing KMS key for the payments schema.
+  - |-
+    Revert "Enable HTTP/2 for the API gateway"
+
+    This reverts commit 3f2a1c9. HTTP/2 broke uploads from the Android app (stream reset after 1 MB), so we turn it off until the client is fixed.
+  - |-
+    Add NOT NULL constraint to orders.currency
+
+    Every row has a currency since the backfill in #350.
+  - |-
+    Remove feature flag new_checkout
+
+    Rolled out to 100% three weeks ago with no issues.
+  - |-
+    Handle provider 429 with retry-after
+
+    The provider started sending 429s during peak hours; we now wait as long as its retry-after header says instead of failing the charge.
+  - |-
+    Fix timezone bug in settlement report
+
+    Settlements after 23:00 UTC were counted on the next day for US merchants.
+  - |-
+    Add retry_limit setting to the webhook sender
+
+    Defaults to 5. Merchants on slow hosts asked for more attempts.
+  - |-
+    Switch email provider from SendGrid to SES
+
+    SES is 70% cheaper at our volume and we already run everything else on AWS.
+  - |-
+    Validate currency against the cart before charging
+
+    Fixes the CAD/USD mix-up for saved cards (PAY-1302).
+  - Disable retries on 409 from the payment provider
+  - Add index on orders.customer_id
+  - Pin grpcio to 1.66 because 1.67 has no wheel for ARM Linux
+  - |-
+    Downgrade boto3 to 1.34
+
+    1.35 changed the default S3 checksum and broke uploads to MinIO.
+  - |-
+    Upgrade Django to 5.1.2
+
+    Fixes CVE-2024-45230 in the admin panel.
+  - Pin numpy below 2.0 until pandas is upgraded, pandas 1.5 crashes on import with numpy 2
+  - Pin redis-py to 5.0 because 5.1 drops support for our Redis 6 cluster
+  - Hold back webpack at 5.93, 5.94 breaks the source maps we upload to Sentry
+  - Lock node to 20.x in .nvmrc, the build fails on 22 because of the old node-sass
+  - |-
+    Replace moment.js with date-fns
+
+    moment is unmaintained and adds 70 KB to the checkout bundle.
+
+  # --- reviews (approving or requesting changes records who reviewed what) ---
+  - |-
+    PR #431 review: approved
+
+    approved: LGTM, the queue consumer handles redelivery correctly.
+  - |-
+    PR #433 review: approved
+
+    approved:
+  - |-
+    PR #212 review: changes requested
+
+    changes requested: retrying on 409 will double-charge. Only retry on 5xx and timeouts.
+  - |-
+    PR #388 review: approved
+
+    approved: Looks good. Make sure the migration runs before the deploy, it adds a NOT NULL column.
+  - |-
+    PR #97 review: changes requested
+
+    changes requested: this logs the full card number in debug mode, please mask it.
+  - |-
+    PR #156 review: approved
+
+    approved: 👍
+  - |-
+    PR #77 review: approved
+
+    approved: lgtm
+  - |-
+    PR #301 review: commented
+
+    commented: Have you load-tested this? The old consumer fell over at 300 messages per second.
+  - |-
+    PR #520 review: approved
+
+    approved: Ship it
+  - |-
+    PR #612 review: approved
+
+    approved: Thanks for adding the runbook entry.
+  - |-
+    PR #702 review: changes requested
+
+    changes requested: please add a test for the empty cart case.
+  - |-
+    PR #645 review: approved
+
+    approved:
+  - |-
+    PR #650 review: approved
+
+    approved: 👍 🚀
+  - |-
+    PR #651 review: approved
+
+    approved: :shipit:
+  - |-
+    PR #658 review: approved
+
+    approved: nice work
+  - |-
+    PR #660 review: changes requested
+
+    changes requested:
+  - |-
+    PR #663 review: approved
+
+    approved: LGTM!
+
+  # --- inline review comments (file path, then the comment) ---
+  - |-
+    services/payments/retry.py
+
+    This retries on 409 Conflict, which the provider returns for duplicate charges. Retrying it double-charges the customer.
+  - |-
+    migrations/0042_add_status_index.py
+
+    Create the index CONCURRENTLY, otherwise this locks the orders table for the whole migration (about 20 minutes on prod).
+  - |-
+    api/auth/session.py
+
+    The TTL should come from settings, ops wants to tune it without a deploy.
+  - |-
+    billing/grpc/client.py
+
+    Set a deadline on this call. Without one a stuck ledger blocks the billing worker forever.
+  - |-
+    web/src/checkout/Payment.tsx
+
+    We can't show the raw provider error here, it sometimes includes the card BIN. Map it to our own messages.
+  - |-
+    api/billing/invoices.py
+
+    This loads every invoice of the customer into memory and big merchants have 200k+. Paginate it.
+  - |-
+    services/ledger/consumer.py
+
+    Ack after the write, not before. If we crash in between we lose the entry.
+  - |-
+    services/payments/dlq.py
+
+    Include the original error in the DLQ message, otherwise on-call has to dig through the logs.
+
+  # --- GitHub comments ---
+  - "Root cause: both the payment worker and checkout retried, so one failed charge became up to 30 provider calls. Capping retries in the worker only (#212) fixes it."
+  - "I measured it: with the queue, checkout p99 went from 8.2 s to 450 ms on staging."
+  - We should keep REST for the mobile app until v5.2 is the minimum version, older apps can't speak gRPC.
+  - "Decided in today's sync: we go with RabbitMQ, not Kafka. We already run RabbitMQ for notifications and don't need replay."
+  - This breaks the nightly reconciliation job, which still reads the old table. I'll update it in a follow-up PR before we merge.
+  - "+1 to RabbitMQ: we already run it for notifications, so there's no new ops cost."
+  - thanks, confirmed the fix works on staging. Closing PAY-311.
+  - "Heads up: this changes the webhook payload and merchants on the old SDK will break. Needs a changelog entry and a migration guide."
+  - "Benchmarks on an m6i.large: gRPC does 1.8k req/s vs 650 req/s for REST on the ledger write path."
+  - "The flag is safe to remove: 100% rollout since Sept 2 and the error rate is unchanged."
+  - The leaked key was <AWS_ACCESS_KEY>. It's revoked and CloudTrail shows no use outside our account.
+  - We considered Kafka, but we don't need replay and nobody on the team has run it in production.
+  - Stale issues are now closed after 30 days instead of 60, we agreed on it in the planning meeting.
+  - The p95 regression came from the new ORM version, it issues one query per line item. Pinned it back to 2.0.x until they fix it.
+
+  # --- Jira issues (summary, then type / status / assignee and the description) ---
+  - |-
+    Add monitoring for payment queue depth
+
+    Type: Task · Status: To Do · Assignee: Priya Shah
+
+    Alert when the payment queue holds more than 1,000 messages for 5 minutes. It backed up for 2 hours on Oct 3 and nobody noticed.
+  - |-
+    Payments double-charged on provider timeout
+
+    Type: Bug · Status: In Progress · Assignee: Bob Lee
+
+    When the provider times out we retry without an idempotency key, so the customer can be charged twice. 14 cases last week.
+  - |-
+    Migrate billing to gRPC
+
+    Type: Story · Status: Done · Assignee: Alice Kim
+
+    Billing to ledger calls move from REST to gRPC. Acceptance: p99 under 100 ms, REST kept for one release.
+  - |-
+    Rotate the payment provider API key
+
+    Type: Task · Status: Done · Assignee: Dev Patel
+
+    The key was pasted in a public channel by mistake. Rotated it and moved it to the secrets manager.
+  - |-
+    Login rate limiting
+
+    Type: Story · Status: In Review · Assignee: Sam Ortiz
+
+    5 attempts per minute per IP and per account. Locked accounts get an email.
+  - |-
+    Set up monitoring for payments
+
+    Type: Task · Status: To Do
+  - |-
+    Investigate slow ledger writes
+
+    Type: Bug · Status: To Do · Assignee: Alice Kim
+  - |-
+    Refund button missing on mobile
+
+    Type: Bug · Status: In Progress · Assignee: Dev Patel
+  - |-
+    Add retries to the ledger client
+
+    Type: Task · Status: Done · Assignee: Bob Lee
+  - |-
+    Deprecate v1 webhooks
+
+    Type: Epic · Status: In Progress · Assignee: Priya Shah
+
+    All merchants must move to v2 webhooks by Q1. v1 sends unsigned payloads.
+  - |-
+    Refund emails go out twice
+
+    Type: Bug · Status: Done · Assignee: Bob Lee
+
+    The refund worker sent the email before acking the message, so a restart sent it again. Fixed by sending after the ack.
+  - |-
+    Upgrade notification-service to Node 22
+
+    Type: Task · Status: In Progress · Assignee: Dev Patel
+
+    Node 18 is end of life and Node 22 is the current LTS. No API changes expected.
+  - |-
+    Customer charged in the wrong currency
+
+    Type: Bug · Status: To Do · Assignee: Bob Lee
+
+    Orders from Canada were charged in USD although the cart showed CAD. Only happens with saved cards.
+  - |-
+    Add SSO for the admin panel
+
+    Type: Story · Status: To Do · Assignee: Sam Ortiz
+
+    Admins log in with Google Workspace instead of local passwords.
+  - |-
+    Remove the legacy fraud rules
+
+    Type: Task · Status: To Do · Assignee: Sam Ortiz
+
+    The ML model replaced them in June; keep them until the Q4 audit is done.
+
+  # --- Jira comments ---
+  - "Tested on staging: with the queue in place p99 checkout latency dropped from 8 s to 900 ms."
+  - "Blocked: the provider's sandbox has been down since Tuesday, so we can't run the end-to-end tests. They promised a fix by Friday."
+  - "Talked to finance: partial refunds must keep the original invoice number, so we can't create a new charge."
+  - "Root cause was a missing index on orders.customer_id. Added it in PR #388 and the report now takes 2 s instead of 4 minutes."
+  - Moving this to the next sprint, the gRPC migration took priority.
+  - "Security review done: no card data in the logs after PR #97. OK to release."
+  - "Agreed with legal: we keep audit logs for 7 years, then delete them."
+  - "Fixed in PR #431 and deployed to prod on Oct 12. The queue depth alert is live."
+  - The customer contact is <EMAIL_ADDRESS>, they confirmed the double charge was refunded on Oct 9.
+  - Automation was moving tickets to Done before QA signed off, so I disabled that rule. QA closes tickets by hand now.
+  - Product decided we won't support partial refunds for gift cards, only for card payments.
+
+  # --- Slack messages ---
+  - "FYI: we're moving the billing service from REST to gRPC next sprint. REST stays for one release."
+  - "Decision from the payments sync: RabbitMQ for the payment queue, not Kafka. Simpler ops and we don't need replay."
+  - payments-svc is now owned by the checkout team. Route billing questions to <@U02ABCDEF>.
+  - "Heads up: PAY-1234 is blocked on the provider's sandbox outage, ETA Friday."
+  - Staging runs on the new Postgres 16 cluster as of today. The prod migration is planned for Saturday 6am UTC with about 6 minutes of downtime.
+  - "Postmortem for Tuesday's checkout outage: retry storm between checkout and payment-service. Action items: cap retries at 3, add idempotency keys, alert on queue depth."
+  - The fraud check now fails open for orders under $50 when the fraud API is down, per the risk team.
+  - Reminder that the webhook secret rotates on the 1st of every month. The new one is in the secrets manager under payments/webhook.
+  - We hit the provider's rate limit (100 req/s) during the sale. Asked them to raise it to 300; until then the queue smooths the spikes.
+  - If you see ERR_LEDGER_LOCKED in the logs, it's the nightly reconciliation holding the lock. It's safe to retry after 02:30 UTC.
+  - "New on-call rotation for payments starts Monday: Alice, Bob, Priya, handover every Monday at 10:00."
+  - The exchange-rate cache is 5 minutes. Finance signed off on that, don't make it longer without asking them.
+  - Auth module is Sam's now, Alice moved to the platform team. Ping Sam for auth reviews.
+  - Don't deploy payments on Fridays after 3pm, we agreed on that in the retro.
+  - "Payments runbook is updated with the new queue steps: https://wiki.example.com/payments/runbook"
+  - Support says refunds take 5+ days again. Looks like the refund worker is stuck; restarting it and opening PAY-1290.
+  - The ledger service runs on the new cluster (k8s-prod-2) now. The old cluster gets shut down next week.
+  - We're freezing deploys from Dec 20 to Jan 3. Hotfixes need approval from <@U02ABCDEF>.
+  - "Load test results: payment-service handles 450 charges/s with the queue, up from 120 without it."
+  - The <EMAIL_ADDRESS> mailbox gets the provider's incident notices; payments on-call watches it.
+  - "Reminder for the release: run the ledger migration before deploying billing, the new code reads the new column."
+  - The CLA check is required on all public repos now, legal asked for it after the license audit.
+  - The billing service reads exchange rates from the cache now, not the FX API. If rates look stale, flush the fx:* keys in Redis.
+  - Billing owns invoices end to end now, generation, emails and the PDF service.
+  - Codecov's coverage gate is required on the payments repo now. PRs under 80% patch coverage can't merge.
+
+  # --- Slack threads ---
+  - |-
+    slack:U02ABCDEF: should we put a queue between checkout and payments? the provider keeps timing out under load
+    slack:U03GHIJKL: +1, RabbitMQ or Kafka?
+    slack:U02ABCDEF: RabbitMQ, we already run it for notifications
+    slack:U04MNOPQR: agreed, let's do it this sprint. Alice takes it
+  - |-
+    slack:U03GHIJKL: why did billing switch to gRPC?
+    slack:U02ABCDEF: payloads were 4x bigger in JSON and parsing was eating CPU on the ledger side
+    slack:U03GHIJKL: makes sense, thanks
+  - |-
+    slack:B0ALERTS1: :rotating_light: payment-service error rate 7% (threshold 5%)
+    slack:U04MNOPQR: looking
+    slack:U04MNOPQR: provider is returning 503s, their status page confirms an incident
+    slack:U02ABCDEF: the queue is absorbing it, no customer impact so far. Watching the depth
+  - |-
+    slack:U05STUVWX: how do I get access to the payments dashboard?
+    slack:U02ABCDEF: ask in #it-help for the payments-readonly group, then it shows up in Grafana under Payments
+  - |-
+    slack:U02ABCDEF: we need to pick a retry limit for the ledger client
+    slack:U03GHIJKL: 3 with backoff? that covered every transient error last quarter
+    slack:U02ABCDEF: ok going with 3, I'll update the config
+  - |-
+    slack:U04MNOPQR: anyone know why the nightly reconciliation failed?
+    slack:U03GHIJKL: disk full on the reporting DB. I dropped old partitions, re-ran it and added an alert at 80%
+  - |-
+    slack:U02ABCDEF: proposal: drop the v1 webhooks in Q1
+    slack:U05STUVWX: some merchants still use them, I'll get a list
+    slack:U05STUVWX: 12 merchants, all on SDK < 3. We'll email them a migration guide
+  - |-
+    slack:U02ABCDEF: who owns the auth module these days?
+    slack:U04MNOPQR: Sam since August, Alice moved to platform
+  - |-
+    slack:U03GHIJKL: the deploy to prod failed, anyone know why?
+    slack:U04MNOPQR: the migration timed out on the orders table. I'll rerun it with CONCURRENTLY tonight
+  - |-
+    slack:U05STUVWX: do we still need the legacy fraud rules?
+    slack:U03GHIJKL: no, the new model replaced them in June. I'll delete them after the audit
+
+noise:
+  # --- thanks, +1, small replies ---
+  - thanks!
+  - thank you!!
+  - thx
+  - thanks a lot 🙏
+  - great, thanks!
+  - Thanks @alice!
+  - thanks <@U02ABCDEF>
+  - "much appreciated :pray:"
+  - "+1"
+  - +1 from me
+  - same
+  - agreed
+  - this
+  - "^"
+  - "yes"
+  - ok
+  - sounds good
+  - SGTM
+  - LGTM
+  - lgtm 🚀
+  - nice!
+  - cool
+  - great work!
+  - haha
+  - 😂😂
+  - makes sense
+  - on it
+
+  # --- emoji only ---
+  - ":+1:"
+  - ":tada:"
+  - ":white_check_mark:"
+  - ":eyes:"
+  - 🎉
+  - 🙏
+  - ✅
+  - ":pray: :pray:"
+  - ":rocket:"
+  - 🔥🔥🔥
+  - 👍
+  - ":100:"
+
+  # --- CI chatter ---
+  - "Build #4521 passed"
+  - ✅ CI passed on main (2m 31s)
+  - "❌ Build failed: tests (3.12). See the logs for details."
+  - "Deploy to staging succeeded: payments-service@a1b2c3d"
+  - |-
+    Codecov Report
+    Merging #312 into main will increase coverage by 0.02%.
+    The diff coverage is 100.00%.
+  - Coverage remained the same at 84.1% when pulling a1b2c3d on feature/retry into main.
+  - |-
+    SonarCloud Quality Gate passed!
+    0 Bugs
+    0 Vulnerabilities
+    0 Code Smells
+  - All checks have passed
+  - "Pipeline #8812 for main succeeded in 6m 12s"
+  - "Nightly e2e run: 412 passed, 0 failed, 3 skipped"
+  - "Preview deployment ready: https://checkout-git-feature-retry-acme.vercel.app"
+  - lint ✔ test ✔ build ✔
+  - Deployment of ledger-service v2.14.3 to production completed
+  - "[payments-service] build #990 FAILED (unit tests) https://ci.example.com/job/payments/990"
+  - "Test run 12345 finished: 1,204 passed, 0 failed"
+  - "Snyk: no new vulnerabilities found"
+
+  # --- bots and automation ---
+  - |-
+    Bump lodash from 4.17.20 to 4.17.21
+
+    Bumps lodash from 4.17.20 to 4.17.21.
+    - Release notes
+    - Commits
+
+    Dependabot will resolve any conflicts with this PR as long as you don't alter it yourself.
+  - "chore(deps): update dependency eslint to v9.12.0"
+  - This issue has been automatically marked as stale because it has not had recent activity. It will be closed if no further activity occurs.
+  - This pull request was closed because it has been stale for 30 days.
+  - PAY-1234 transitioned from To Do to In Progress
+  - "Automation for Jira: this issue was moved to Done because the linked PR was merged."
+  - "Reminder: standup in 5 minutes"
+  - ":calendar: Daily digest: 3 new tickets, 5 updated"
+  - "Merged #412 into main"
+  - This branch has conflicts that must be resolved
+  - "@dependabot rebase"
+  - /retest
+  - /assign @bob
+  - "CLA assistant check: All committers have signed the CLA."
+  - "license/cla: Contributor License Agreement is signed."
+  - "DCO check passed: all commits are signed off."
+  - The commit status check ci/circleci test succeeded.
+  - "Automation for Jira: the due date was set to Oct 30 from the sprint end date."
+  - "Jira Automation: this issue moved to In Review because a pull request was opened."
+  - This pull request has been automatically marked as stale because it has not had any activity in 14 days.
+  - Closing this issue due to inactivity. Feel free to reopen it if it is still relevant.
+  - This issue was automatically closed because the linked pull request was merged.
+  - Thank you for your submission! Like many open source projects, we ask that you sign our Contributor License Agreement before we can accept your contribution.
+  - |-
+    This PR contains the following updates:
+
+    | Package | Change |
+    |---|---|
+    | axios | 1.7.2 -> 1.7.7 |
+  - "chore(main): release 2.14.3"
+  - The workflow run CI completed successfully on main.
+  - "Jira Automation: PAY-1290 was assigned to Bob Lee because the component is Payments."
+  - Your pull request was merged and the branch feature/retry was deleted.
+  - "Issue PAY-1290 was linked to pull request #612 by the GitHub for Jira app."
+  - This pull request has been added to the merge queue.
+  - Build succeeded for payments-staging (v312).
+  - "Sentry: new issue TypeError in checkout/Payment.tsx (12 events)"
+  - "Status page: all systems operational."
+  - |-
+    Codecov Report
+    All modified and coverable lines are covered by tests ✅
+    Project coverage is 84.12%. Comparing base (a1b2c3d) to head (e4f5a6b).
+  - "Codecov: patch coverage 92.30%, project coverage 84.10% (-0.02%)"
+  - "Visit the preview URL for this PR (updated for commit e4f5a6b): https://acme-checkout--pr612-x1y2z3.web.app"
+  - Deploy Preview for acme-docs ready! Built without sensitive environment variables. Latest commit e4f5a6b.
+  - |-
+    This PR contains the following updates:
+
+    | Package | Change |
+    |---|---|
+    | @types/node | 20.14.2 -> 20.16.5 |
+
+    Configuration: Schedule: at any time. Automerge: Disabled.
+  - Bumps the npm_and_yarn group with 3 updates in the / directory, express, body-parser and path-to-regexp.
+  - "Automation for Jira: story points were copied from the parent epic."
+  - "Jira Automation: Sprint 42 started, 18 issues were added to the sprint."
+  - This issue is stale because it has been open 60 days with no activity. Remove the stale label or comment, or this will be closed in 7 days.
+  - Hi! This issue has not had any activity for 30 days, so it will be closed soon. Comment to keep it open.
+  - "SonarCloud: 0 new issues, 0 security hotspots, 85.3% coverage on new code"
+  - "Dependency review: no vulnerable packages found."
+  - "Changeset detected. Latest commit: e4f5a6b. The changes in this PR will be included in the next version bump."
+
+  # --- trivial commits ---
+  - wip
+  - WIP
+  - fix typo
+  - typo
+  - fmt
+  - lint
+  - Merge branch 'main' into feature/retry-limit
+  - |-
+    Merge pull request #212 from acme/dependabot/npm_and_yarn/lodash-4.17.21
+
+    Bump lodash from 4.17.20 to 4.17.21
+  - Merge remote-tracking branch 'origin/main'
+  - Update README.md
+  - Apply suggestions from code review
+  - address review comments
+  - oops
+  - more fixes
+  - "."
+  - fix tests
+
+  # --- nits ---
+  - |-
+    services/payments/retry.py
+
+    nit: trailing whitespace
+  - |-
+    README.md
+
+    typo: recieve
+  - |-
+    PR #78 review: commented
+
+    commented: nit
+
+  # --- pings ---
+  - any update?
+  - bump
+  - ping
+  - friendly reminder 🙂
+  - following up on this
+  - <@U03GHIJKL> can you take a look?
+  - "@bob PTAL"
+  - Any ETA on this?
+
+  # --- social ---
+  - happy friday everyone! 🎉
+  - "congrats on the launch!! :tada:"
+  - welcome to the team, Sam!
+  - good morning
+  - have a good weekend
+  - lunch is here 🍕
+  - who's in the office today?
+  - brb
+  - joining the call now
+  - can someone share the zoom link?
+  - running 5 min late
+  - happy birthday Priya! 🎂
+  - |-
+    slack:U02ABCDEF: lunch at 12?
+    slack:U03GHIJKL: +1
+    slack:U04MNOPQR: 👍
+  - |-
+    slack:U05STUVWX: happy birthday <@U04MNOPQR>! :birthday:
+    slack:U02ABCDEF: :tada: :tada:
+    slack:U04MNOPQR: thanks everyone!
+
+  # --- junk tickets ---
+  - |-
+    test
+
+    Type: Task · Status: To Do
+  - |-
+    asdf
+
+    Type: Bug · Status: Done
+  - |-
+    test ticket please ignore
+
+    Type: Task · Status: To Do
+  - |-
+    delete me
+
+    Type: Task · Status: Done
+  - Thanks, closing.
+  - +1, seeing the same
