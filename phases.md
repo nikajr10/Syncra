@@ -446,7 +446,7 @@ flowchart LR
 - [x] 0.6 Background job runner
 
 **Phase 1 — Collect and clean**
-- [ ] 1.1 Connector interface
+- [x] 1.1 Connector interface
 - [ ] 1.2 GitHub connector
 - [ ] 1.3 Jira connector
 - [ ] 1.4 Slack connector

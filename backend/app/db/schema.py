@@ -7,7 +7,7 @@ this module is the ORM view used by queries.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal, get_args
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
@@ -31,8 +31,10 @@ from app.config.settings import get_settings
 EMBEDDING_DIM = get_settings().embedding_dim
 
 # Allowed values (kept here so every writer agrees; small enough not to need config)
-SOURCE_KINDS = ("github", "jira", "slack")
-ITEM_TYPES = ("pr", "commit", "review", "issue", "comment", "message", "thread")
+SourceKind = Literal["github", "jira", "slack"]
+ItemType = Literal["pr", "commit", "review", "issue", "comment", "message", "thread"]
+SOURCE_KINDS = get_args(SourceKind)
+ITEM_TYPES = get_args(ItemType)
 ITEM_STATUSES = ("new", "processed", "noise", "failed")
 ENTITY_TYPES = ("person", "service", "tool", "project")
 ACTION_STATUSES = ("pending", "approved", "rejected", "done", "failed")

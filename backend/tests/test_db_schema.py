@@ -1,16 +1,14 @@
 """Task 0.4: migrations run up and down on an empty database; one row in every table."""
 
-from collections.abc import Iterator
 from datetime import UTC, datetime
 
-import pytest
 from alembic import command
 from alembic.config import Config
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app.config.settings import BACKEND_DIR
-from app.db.engine import get_engine, new_session
+from app.db.engine import get_engine
 from app.db.schema import (
     EMBEDDING_DIM,
     Action,
@@ -29,8 +27,6 @@ from app.db.schema import (
     UserSourceIdentity,
 )
 
-ALEMBIC = Config(str(BACKEND_DIR / "alembic.ini"))
-
 
 def _public_tables() -> set[str]:
     with get_engine().connect() as conn:
@@ -38,28 +34,16 @@ def _public_tables() -> set[str]:
         return {r[0] for r in rows}
 
 
-@pytest.fixture(scope="module")
-def migrated() -> Iterator[None]:
-    command.downgrade(ALEMBIC, "base")
+def test_migrations_run_down_and_up_cleanly(migrated_db: None) -> None:
+    cfg = Config(str(BACKEND_DIR / "alembic.ini"))
+    command.downgrade(cfg, "base")
     assert _public_tables() <= {"alembic_version"}
-    command.upgrade(ALEMBIC, "head")
-    yield
-    command.downgrade(ALEMBIC, "base")
-    assert _public_tables() <= {"alembic_version"}
-
-
-@pytest.fixture
-def session(migrated: None) -> Iterator[Session]:
-    with new_session() as s:
-        yield s
-        s.rollback()
-
-
-def test_every_orm_table_exists_after_upgrade(migrated: None) -> None:
+    command.upgrade(cfg, "head")
     assert set(Base.metadata.tables) <= _public_tables()
 
 
-def test_insert_and_read_one_row_in_every_table(session: Session) -> None:
+def test_insert_and_read_one_row_in_every_table(db_session: Session) -> None:
+    session = db_session
     now = datetime.now(UTC)
     user = User(username="alice", display_name="Alice")
     session.add(user)
@@ -73,7 +57,7 @@ def test_insert_and_read_one_row_in_every_table(session: Session) -> None:
 
     item = Item(
         source_id=source.id,
-        external_id="pr-42",
+        external_id="#42",
         type="pr",
         title="Add queue between checkout and payments",
         text="The payment provider times out under load, so we add a RabbitMQ queue.",
@@ -140,7 +124,7 @@ def test_insert_and_read_one_row_in_every_table(session: Session) -> None:
     assert "queue" in chunk.tsv  # generated full-text column
     assert len(chunk.vector) == EMBEDDING_DIM
 
-    # The two search indexes answer queries (same session: the fixture rolls back at the end).
+    # The two search indexes answer queries.
     nearest = session.scalars(
         select(Chunk).order_by(Chunk.vector.cosine_distance(vector)).limit(1)
     ).first()

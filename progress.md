@@ -5,10 +5,36 @@ Live record of what has been built. Agents add an entry here after every task (f
 ## Current status
 
 - **Current phase:** Phase 1 — Collect and clean
-- **Next task:** 1.1 — Connector interface
-- **Completed tasks:** 0.1, 0.2, 0.3, 0.4, 0.5, 0.6 (Phase 0 complete)
+- **Next task:** 1.2 — GitHub connector
+- **Completed tasks:** 0.1–0.6 (Phase 0 complete), 1.1
 
 ## Log
+
+### Task 1.1 — Connector interface  ✅ done
+**Date:** 2026-10-15
+
+**Built**
+- `RawItem` (pydantic, frozen): `external_id`, `type` (`ItemType` literal), `text`, `title`, `author`, `created_at`, `updated_at`, `link`, `parent_external_id`, `access_tags` (**required and non-empty**: an item nobody may see is rejected, fail closed); `content_hash()`.
+- `Connector` protocol: `fetch_new(since_cursor) -> (items, next_cursor)`.
+- `save_items(session, source, items, next_cursor)`: batched upsert on `(source_id, external_id)`; unchanged items (same content hash) are skipped, changed ones are updated and reset to status `new`; duplicates inside one batch collapse; cursor, `last_synced_at` and `last_error` updated; **one commit**. `sync_source(session, source, connector)` = fetch → save.
+- Shared DB test fixtures in `tests/conftest.py`: `migrated_db` (session-scoped, migrated test DB) and `db_session` (truncates every table after the test). `tests/fakes.py`: `FakeConnector`, `item()`.
+
+**Key files**
+- `backend/app/learning/connectors/base.py` — `RawItem`, `Connector`
+- `backend/app/learning/sync.py` — `save_items`, `sync_source`
+- `backend/tests/test_sync.py`, `backend/tests/fakes.py`, `backend/tests/conftest.py`
+
+**Decisions**
+- Connectors are pure fetchers (no DB access); `sync.py` owns persistence. The cursor is an opaque string per source.
+- Conventions: `author` = `kind:<id>` (`github:alice`, `jira:<accountId>`, `slack:U0123`); `external_id` = GitHub `#<number>` for issues **and** PRs (shared numbering), `comment:<id>`, `review:<id>`, commit sha; Jira issue key / `comment:<id>`; Slack `ts`. `parent_external_id` points at the PR / issue / thread.
+- Access tags: `public`, `github:repo:<owner/repo>`, `jira:project:<KEY>`, `slack:channel:<ID>`. Task 6.1 filters with these.
+- DB tests use the `db_session` fixture (commits allowed, tables truncated afterwards); never add per-test migration fixtures.
+
+**How to run / test**
+- `make test`
+
+**Known issues / TODO**
+- none
 
 ### Task 0.6 — Background job runner  ✅ done
 **Date:** 2026-10-15
