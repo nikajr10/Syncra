@@ -4,11 +4,47 @@ Live record of what has been built. Agents add an entry here after every task (f
 
 ## Current status
 
-- **Current phase:** Phase 4 — Link and store
-- **Next task:** 4.4 — Learning pipeline orchestration (Phase 5 can start any time)
-- **Completed tasks:** 0.1–0.6 (Phase 0 complete), 1.1–1.6 (Phase 1 complete), 2.1–2.3 (Phase 2 complete), 3.1–3.4 (Phase 3 complete), 4.1–4.3
+- **Current phase:** Phase 5 — Chat basics (Phase 4 complete: the learning pipeline runs end to end)
+- **Next task:** 5.1 — Users and login
+- **Completed tasks:** 0.1–0.6 (Phase 0 complete), 1.1–1.6 (Phase 1 complete), 2.1–2.3 (Phase 2 complete), 3.1–3.4 (Phase 3 complete), 4.1–4.4 (Phase 4 complete)
 
 ## Log
+
+### Task 4.4 — Learning pipeline orchestration  ✅ done
+**Date:** 2026-10-16
+
+**Built**
+- `app/learning/pipeline.py`: `learn(session_factory, build, classify, client) -> counts` is one learning run. It calls `sync_all_sources` (connectors + Presidio), then `triage_new_items`. Then, for every conversation that has a new or failed item: chunk → GLiNER → decision reader → embed → `save_chunks` (4.3) → `write_graph` (4.2, linking with 4.1) → items `processed`. Finally it runs `link_identities`, logs and returns `{"sources", "noise", "learned", "failed"}`.
+  - A conversation is a root item (PR, issue, Jira issue, Slack thread or message, or a commit) plus its non-noise replies, oldest first. A reply whose parent is missing or noise is a conversation of its own.
+  - Each conversation is one transaction. The model calls come first, each taking all of its chunks in one batch; then its chunks and graph are replaced. A failure (Ollama down, a model error, a DB error) rolls the conversation back, marks its unprocessed items `failed` and logs the traceback; the other conversations continue. Failed items are retried on the next run.
+  - Items that triage marks noise lose their chunks, links and decisions (an edit can turn a useful message into "+1").
+- The worker's job is now `learn` (it was `sync_sources`), still every `SYNC_INTERVAL_MINUTES` with a first run at start.
+- `find_entities`: GLiNER no longer sees Slack mention markup (it reported `<@U03>` as a person "U03"); it gets the mention's label, if any, instead.
+- Tests (mocked sources, triage classifier and Ollama; real Presidio, GLiNER, embedder and SBERT):
+  - One run fills items, chunks (all embedded), entities, aliases, links and decisions; the PR's `PaymentService` and the Slack thread's `payments-svc` are one entity. A second run with no new data changes no row and asks no model.
+  - A conversation whose Ollama call fails is rolled back while the others are stored, and is learned on the next run.
+  - A new review re-learns its PR: the decision is replaced, not added twice. A thread edited down to "+1" is forgotten.
+  - Checked that the tests fail without the noise clean-up, or when replies are left out of conversations.
+- Smoke run (not part of the suite) with the real triage model and qwen3:8b, on the same sample in a throwaway database: both decisions read correctly with the right people, `thanks!` dropped as noise. First run 35 s including model loading, second run 0.0 s.
+
+**Key files**
+- `backend/app/learning/pipeline.py`, `backend/app/jobs/scheduler.py`, `backend/app/learning/entities.py`, `backend/tests/test_pipeline.py`, `backend/tests/test_jobs.py`, `backend/tests/fakes.py` (`Feed`, `graph_links`)
+
+**Decisions**
+- The unit of work is the conversation, re-learned whole whenever any of its items is new. That is the simplest way to keep decisions (which need the whole thread) and "replace what these items said" correct. The cost: an active PR's older comments are chunked and embedded again.
+- Batching: triage classifies all new items in one call; GLiNER and the embedder take one conversation's chunks per call. Conversations aren't batched together, because the decision reader's LLM call dominates the time anyway.
+- `items.status`: `new` → `processed` | `noise` | `failed` (failed = retried next run). `learn()` doesn't raise for one bad conversation; it raises only if sync or triage fails as a whole (e.g. no trained triage model: `make train-triage`).
+- Tests inject `session_factory=`, `build=`, `classify=` and `client=` (no monkeypatching). `tests.fakes.Feed` is a connector for any external ids; `tests.fakes.graph_links` reads the graph as readable triples.
+
+**How to run / test**
+- `make worker` (needs Ollama running and `make train-triage` done) · `make test`
+
+**Known issues / TODO**
+- A failing conversation is retried on every run with no limit; add an attempts counter if one keeps failing (each retry may cost an LLM call).
+- Triage loads every new item into memory at once; a first sync of hundreds of thousands of items would need paging.
+- If Ollama hangs instead of refusing connections, each long conversation waits up to `OLLAMA_TIMEOUT_SECONDS` × 3 before it fails.
+- When a reply turns into noise, its conversation's decision isn't re-read until the conversation changes again.
+- gliner_small also tags noise as people (`consumer` in a commit message, `fyi` in Slack), and those become person entities. A bigger GLiNER (Task 3.1 note) or a stopword list would help.
 
 ### Task 4.3 — Search indexes  ✅ done
 **Date:** 2026-10-15

@@ -27,7 +27,8 @@ Syncra is a team-memory chatbot. A **learning pipeline** (offline, every 15 min)
 
 - Planning docs are written: `description.md`, `phases.md`, `agent.md`, `progress.md`.
 - **The Python project lives in `backend/`** (decided in Task 0.1): package `backend/app/`, yaml in `backend/config/`, `backend/tests/`, `backend/scripts/`, `backend/pyproject.toml`, `backend/Makefile`. Commands (from `backend/`): `make install`, `make run`, `make test`, `make lint`.
-- `frontend/` is reserved for the web app (Phase 9); it only holds a placeholder today.
+- **The learning pipeline is complete (Phases 1–4):** `make worker` runs `app/learning/pipeline.py: learn()` every `SYNC_INTERVAL_MINUTES` (sync → scrub → triage → chunk → entities → decisions → embed → link → store). The chat side (Phases 5–7) reads what it stores.
+- `frontend/` is reserved for the web app (Phase 9); it holds a prototype (`index.html`, `app.js`, `styles.css`).
 - **Local dev runs without Docker** (user decision): your own PostgreSQL + pgvector (dev machine: Homebrew PostgreSQL 18 on port 5434, `make db-init`) and native Ollama. `backend/Dockerfile` + `backend/docker-compose.yml` are **production-only**; never `docker compose up` locally.
 - The old empty scaffold that used to live in `backend/` was deleted in Task 0.1.
 

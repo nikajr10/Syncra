@@ -28,7 +28,7 @@ Browse the database in DBeaver: host `localhost`, port `5434`, database `syncra`
 ```bash
 cd backend
 make run          # API on http://127.0.0.1:8000  (GET /health -> {"status": "ok"})
-make worker       # background job runner (every SYNC_INTERVAL_MINUTES)
+make worker       # learning pipeline: sync + learn every SYNC_INTERVAL_MINUTES (needs Ollama)
 make lint         # ruff check + format check
 ```
 
@@ -43,7 +43,7 @@ insert into sources (kind, name, external_id) values
   ('slack',  '#eng-payments', 'C0123456789');     -- channel id
 ```
 
-`make worker` then pulls new items every `SYNC_INTERVAL_MINUTES`, scrubs personal data and secrets, and stores them with status `new`.
+`make worker` then, every `SYNC_INTERVAL_MINUTES`, pulls new items, scrubs personal data and secrets, drops noise and learns from the rest: chunks with vectors and a keyword index, entities, decisions and the links between them. It needs Ollama running and `make train-triage` done once. Each item's `status` ends up `processed` or `noise`; `failed` ones (e.g. Ollama was down) are retried on the next run.
 
 ## Production (Docker)
 

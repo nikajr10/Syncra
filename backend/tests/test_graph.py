@@ -5,11 +5,12 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.schema import Chunk, Decision, Edge, Entity, Item, Source
+from app.db.schema import Chunk, Decision, Entity, Item, Source
 from app.learning.chunk import chunk_item
 from app.learning.decisions import FoundDecision
 from app.learning.entities import FoundEntity
 from app.learning.graph import write_graph
+from tests.fakes import graph_links
 
 MONDAY = datetime(2026, 10, 12, 9, tzinfo=UTC)
 PR_DECISION = FoundDecision(
@@ -92,24 +93,6 @@ def _chunks(session: Session, items: list[Item]) -> list[Chunk]:
     return rows
 
 
-def _graph(session: Session) -> list[tuple[str, str, str]]:
-    """Every link as (from, relation, to) with readable names, duplicates kept."""
-    items = {i.id: i.external_id for i in session.scalars(select(Item))}
-    name = {("entity", e.id): e.name for e in session.scalars(select(Entity))}
-    name |= {("item", i): external for i, external in items.items()}
-    name |= {
-        ("chunk", c.id): f"chunk of {items[c.item_id]}" for c in session.scalars(select(Chunk))
-    }
-    name |= {
-        ("decision", d.id): f"decision on {items[d.item_id]}"
-        for d in session.scalars(select(Decision))
-    }
-    return sorted(
-        (name[e.src_type, e.src_id], e.relation, name[e.dst_type, e.dst_id])
-        for e in session.scalars(select(Edge))
-    )
-
-
 EXPECTED = sorted(
     [
         ("github:alice", "authored", "#42"),
@@ -164,7 +147,7 @@ def test_a_pr_and_a_slack_thread_give_each_node_and_link_once(db_session: Sessio
         write_graph(db_session, thread, thread_chunks, thread_found, THREAD_DECISION)
         db_session.commit()
 
-        assert _graph(db_session) == EXPECTED
+        assert graph_links(db_session) == EXPECTED
         entities = {(e.type, e.name) for e in db_session.scalars(select(Entity))}
         assert entities == {
             ("service", "payment service"),
@@ -182,9 +165,9 @@ def test_a_pr_and_a_slack_thread_give_each_node_and_link_once(db_session: Sessio
     write_graph(db_session, pr, pr_chunks, pr_found, None)
     db_session.commit()
     assert [d.item_id for d in db_session.scalars(select(Decision))] == [thread[0].id]
-    assert not [link for link in _graph(db_session) if link[2] == "decision on #42"]
+    assert not [link for link in graph_links(db_session) if link[2] == "decision on #42"]
 
     # Deleting a source deletes everything learned from it.
     db_session.delete(db_session.get(Source, thread[0].source_id))
     db_session.commit()
-    assert not [link for link in _graph(db_session) if "1728000000.000100" in str(link)]
+    assert not [link for link in graph_links(db_session) if "1728000000.000100" in str(link)]

@@ -231,7 +231,8 @@ make run        # API on http://127.0.0.1:8000
 Check it works — open http://127.0.0.1:8000/health (should show `{"status":"ok"}`)
 or http://127.0.0.1:8000/docs for the interactive API page. Stop with `Ctrl+C`.
 
-To sync GitHub/Jira/Slack in the background, run `make worker` in a second terminal (also inside `backend/`).
+To sync and learn from GitHub/Jira/Slack in the background, run `make worker` in a second terminal (also inside `backend/`).
+It needs Ollama running and the noise filter trained (`make train-triage`, step 8).
 It needs the source credentials (step 10).
 
 ---
@@ -247,7 +248,9 @@ It needs the source credentials (step 10).
      ('jira',   'PAY',           'PAY'),             -- project key
      ('slack',  '#eng-payments', 'C0123456789');     -- channel id
    ```
-3. `make worker` — new items show up in the `items` table (personal data and secrets are scrubbed first).
+3. `make worker` — new items show up in the `items` table (personal data and secrets are scrubbed first), then the
+   worker learns from them: `chunks`, `entities`, `decisions` and `edges` fill up, and each item's `status` becomes
+   `processed` or `noise`.
 
 ---
 

@@ -468,7 +468,7 @@ flowchart LR
 - [x] 4.1 Entity linking (SBERT)
 - [x] 4.2 Knowledge graph writer
 - [x] 4.3 Search indexes
-- [ ] 4.4 Learning pipeline orchestration
+- [x] 4.4 Learning pipeline orchestration
 
 **Phase 5 — Chat basics**
 - [ ] 5.1 Users and login
