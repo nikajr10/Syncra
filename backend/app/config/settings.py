@@ -63,6 +63,11 @@ class Settings(BaseSettings):
     chunk_size: int = 1500
     chunk_overlap: int = 200
 
+    # --- decision reader, in characters: shorter conversations are skipped, longer ones cut in
+    #     the middle (Ollama runs qwen3:8b with 4096 tokens of context; the prompt takes ~720) ---
+    decision_min_chars: int = 60
+    decision_max_chars: int = 6000
+
     # --- misc ---
     log_level: str = "INFO"
     api_docs: bool = False  # /docs, /redoc, /openapi.json; off unless set (local dev turns it on)

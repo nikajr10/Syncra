@@ -461,7 +461,7 @@ flowchart LR
 **Phase 3 — Understand**
 - [x] 3.1 Entity finder (GLiNER)
 - [x] 3.2 Decision reader prompt
-- [ ] 3.3 Decision reader step
+- [x] 3.3 Decision reader step
 - [ ] 3.4 Embedder
 
 **Phase 4 — Link and store**

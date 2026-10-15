@@ -5,10 +5,39 @@ Live record of what has been built. Agents add an entry here after every task (f
 ## Current status
 
 - **Current phase:** Phase 3 — Understand
-- **Next task:** 3.3 — Decision reader step (3.4 Embedder can run in parallel)
-- **Completed tasks:** 0.1–0.6 (Phase 0 complete), 1.1–1.6 (Phase 1 complete), 2.1–2.3 (Phase 2 complete), 3.1, 3.2
+- **Next task:** 3.4 — Embedder
+- **Completed tasks:** 0.1–0.6 (Phase 0 complete), 1.1–1.6 (Phase 1 complete), 2.1–2.3 (Phase 2 complete), 3.1–3.3
 
 ## Log
+
+### Task 3.3 — Decision reader step  ✅ done
+**Date:** 2026-10-15
+
+**Built**
+- `app/learning/decisions.py`: `read_decision(thread, entities, client=None) -> FoundDecision | None`.
+  - Input is a whole conversation: `thread[0]` is the root (`pr`, `issue`, `thread` or `message`) and the rest its replies (reviews, comments), oldest first. Comments, reviews and commits are never read on their own.
+  - Conversations with less than `DECISION_MIN_CHARS` (60) characters of text are skipped without a model call. Longer than `DECISION_MAX_CHARS` (6000): the middle is cut (`[…]`), keeping the opening and the conclusion.
+  - Renders the thread in the Task 3.2 format, with `<thread>` tags removed from the data, and fills the v1 prompt with it and the entities (`name (type)`, deduplicated).
+  - Calls Ollama with the `FoundDecision` JSON schema as `format`, then validates with pydantic. Bad output is retried once, then dropped with a warning. An empty decision means none. `OllamaError` (Ollama down) is not caught.
+  - `people` keeps only authors who wrote in the conversation (item authors + Slack line authors), deduplicated.
+- Settings `DECISION_MIN_CHARS`, `DECISION_MAX_CHARS`.
+- Tests (mocked Ollama): good JSON (and the request: model, system prompt, JSON schema, quoted thread, entities); bad JSON then good; bad twice (dropped, 2 calls); no decision; short conversations and lone comments skipped without a call; a PR read with its review, with a non-author removed from `people` and `</thread>` in the data neutralised; a long thread keeps its start and end; Ollama down raises.
+
+**Key files**
+- `backend/app/learning/decisions.py`, `backend/tests/test_decisions.py`
+
+**Decisions**
+- Contract for Task 4.4: pass `[root, *replies]`, where replies = items with the same `source_id` and `parent_external_id == root.external_id`, not `noise`, ordered by `created_at`. When only a reply is new, re-read its root's whole conversation. Store at most one decision per root item and replace it on re-read (the wording changes between runs; Ollama samples at the model's default temperature, so the retry isn't a copy of the bad answer).
+- "Dropped" (bad output twice) is final for that run; "failed" (Ollama down → `OllamaError`) is what Task 4.4 retries.
+- `people` are source ids (`slack:U01`, `github:alice`, `jira:<accountId>`), ready to link to person entities in Task 4.2.
+
+**How to run / test**
+- `make test`
+
+**Known issues / TODO**
+- Statement-style injections still produce a decision, but with `people` emptied (checked with the real qwen3:8b). A decision is only as trustworthy as its source message, which is linked as evidence.
+- One decision per conversation (the most important); long threads with several decisions keep one.
+- People who agreed without writing in the thread (e.g. "@tom approved this in the design review") are dropped from `people`.
 
 ### Task 3.2 — Decision reader prompt  ✅ done
 **Date:** 2026-10-15
