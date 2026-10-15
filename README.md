@@ -21,6 +21,7 @@ make install      # creates backend/.venv and installs the backend + dev tools
 cd backend
 cp .env.example .env     # all settings live here; defaults work for local dev
 docker compose up -d     # PostgreSQL 17 + pgvector on localhost:5436 (db/user/password: syncra)
+make migrate             # create / upgrade the database tables (alembic upgrade head)
 make pull-models         # ollama pull qwen3:4b + qwen3:8b into your native Ollama
 ```
 

@@ -5,10 +5,42 @@ Live record of what has been built. Agents add an entry here after every task (f
 ## Current status
 
 - **Current phase:** Phase 0 — Foundation
-- **Next task:** 0.4 — Database schema and migrations (then 0.5, 0.6)
-- **Completed tasks:** 0.1, 0.2, 0.3
+- **Next task:** 0.5 — Model gateway (then 0.6)
+- **Completed tasks:** 0.1, 0.2, 0.3, 0.4
 
 ## Log
+
+### Task 0.4 — Database schema and migrations  ✅ done
+**Date:** 2026-10-15
+
+**Built**
+- SQLAlchemy 2 ORM (`app/db/schema.py`) + Alembic migration `0001_initial_schema` creating: `users`, `user_source_identities`, `sources`, `sync_cursors`, `items`, `chunks` (`vector(1024)` + generated `tsv`), `entities`, `entity_aliases`, `edges`, `decisions`, `chat_sessions`, `chat_messages`, `actions`.
+- Indexes: **HNSW** (`vector_cosine_ops`, m=16, ef_construction=64) on `chunks.vector`, **GIN** on `chunks.tsv` and `items.access_tags`, plus lookup indexes on status / edges / aliases.
+- `app/db/engine.py`: `get_engine()` (cached), `new_session()`, `get_db()` FastAPI dependency.
+- Test: downgrade → upgrade → insert and read one row in every table → cosine + full-text queries → downgrade (nothing left but `alembic_version`).
+- Dev database migrated (`make migrate`).
+
+**Key files**
+- `backend/app/db/schema.py` — ORM models + allowed-value tuples (`ITEM_TYPES`, `ITEM_STATUSES`, `ENTITY_TYPES`, …)
+- `backend/app/db/engine.py` — engine/session helpers
+- `backend/alembic.ini`, `backend/migrations/env.py`, `backend/migrations/versions/0001_initial_schema.py`
+- `backend/tests/test_db_schema.py`
+
+**Decisions**
+- Migrations live in `backend/migrations/` (not `alembic/`, which shadows the `alembic` package). Write them **by hand** with explicit column types on FK columns; the vector dim comes from `get_settings().embedding_dim`.
+- `items.access_tags text[]` is the permission model: tags like `github:repo:org/x`, `jira:project:PAY`, `slack:channel:C123`, `public`. Task 6.1 filters with `access_tags && user_tags` inside the query.
+- `items.status` (`new` → `processed` | `noise` | `failed`) is the Phase 2 work queue; no broker needed.
+- `chunks.tsv` is a stored generated column (`to_tsvector('english', text)`), so the keyword index needs no app code.
+- `edges` is polymorphic: `(src_type, src_id) -relation-> (dst_type, dst_id)` over node types `entity | item | chunk | decision` with optional `item_id` evidence; unique on the 5-tuple so re-runs don't duplicate.
+- Authors / identities are strings like `github:alice`, `slack:U123`, `jira:<accountId>`; `user_source_identities` links them to Syncra users.
+- Sessions: sync SQLAlchemy (`psycopg` 3), `expire_on_commit=False`.
+- Tests that need the DB use the module-scoped `migrated` fixture + a per-test `session` that rolls back.
+
+**How to run / test**
+- `make migrate` (dev DB) · `make test` (uses `syncra_test`, leaves it empty)
+
+**Known issues / TODO**
+- SQLAlchemy 2.1 got installed (pin is `>=2.0`); no problems so far.
 
 ### Task 0.2 — Local services with Docker  ✅ done
 **Date:** 2026-10-15

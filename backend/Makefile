@@ -21,3 +21,6 @@ fmt:
 
 pull-models:
 	.venv/bin/python scripts/pull_ollama_models.py
+
+migrate:
+	.venv/bin/alembic upgrade head

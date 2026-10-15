@@ -441,7 +441,7 @@ flowchart LR
 - [x] 0.1 Project skeleton
 - [x] 0.2 Local services with Docker
 - [x] 0.3 Configuration
-- [ ] 0.4 Database schema and migrations
+- [x] 0.4 Database schema and migrations
 - [ ] 0.5 Model gateway
 - [ ] 0.6 Background job runner
 
