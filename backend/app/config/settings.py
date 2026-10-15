@@ -72,6 +72,9 @@ class ModelSpec(BaseModel):
     name: str  # Ollama: "qwen3:8b" (tag = version). Hugging Face: repo id.
     revision: str | None = None  # Hugging Face git revision; None = main
     gated: bool = False  # needs HF_TOKEN + accepted licence
+    files: list[str] | None = None  # Hugging Face: download only these (glob patterns)
+    labels: list[str] = []  # GLiNER: entity types to look for
+    threshold: float = 0.5  # GLiNER: drop hits scoring lower
 
 
 class ModelsConfig(BaseModel):

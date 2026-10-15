@@ -14,6 +14,13 @@ models:
     runtime: huggingface
     name: urchade/gliner_small-v2.1
     revision: 4e091416cf7c3481db542c2a3d26156916f3a47f  # pinned commit; bump deliberately
+    labels: [person, service, tool, project]  # entity types to look for (stored as entities.type)
+    threshold: 0.5  # hits scoring lower are dropped
+  entity_finder_encoder: # the encoder GLiNER is built on: only its tokenizer + config are used
+    runtime: huggingface
+    name: microsoft/deberta-v3-small
+    revision: a36c739020e01763fe789b4b85e2df55d6180012  # pinned commit; bump deliberately
+    files: [config.json, spm.model, tokenizer_config.json]  # not the 850 MB of weights
   decision_reader: # Qwen3: thread/PR -> {decision, reason, people}
     runtime: ollama
     name: qwen3:8b

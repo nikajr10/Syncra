@@ -459,7 +459,7 @@ flowchart LR
 - [x] 2.3 Chunker
 
 **Phase 3 — Understand**
-- [ ] 3.1 Entity finder (GLiNER)
+- [x] 3.1 Entity finder (GLiNER)
 - [ ] 3.2 Decision reader prompt
 - [ ] 3.3 Decision reader step
 - [ ] 3.4 Embedder

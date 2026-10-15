@@ -36,7 +36,6 @@ ItemType = Literal["pr", "commit", "review", "issue", "comment", "message", "thr
 SOURCE_KINDS = get_args(SourceKind)
 ITEM_TYPES = get_args(ItemType)
 ITEM_STATUSES = ("new", "processed", "noise", "failed")
-ENTITY_TYPES = ("person", "service", "tool", "project")
 ACTION_STATUSES = ("pending", "approved", "rejected", "done", "failed")
 
 
@@ -158,7 +157,7 @@ class Entity(Base):
     __tablename__ = "entities"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    type: Mapped[str] = mapped_column(String(20))
+    type: Mapped[str] = mapped_column(String(20))  # an entity_finder label in config/models.yaml
     name: Mapped[str] = mapped_column(String(300))  # canonical name
     created_at: Mapped[datetime] = _created_at()
 

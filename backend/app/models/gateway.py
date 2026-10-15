@@ -5,6 +5,7 @@
   cached in memory, on GPU (cuda / mps) when available.
 - `train_setfit(role, ...)` / `classify(role, texts)`: SetFit classifiers trained here from the
   `<role>_base` body and saved under TRAINED_MODELS_DIR.
+- `load_gliner(role)` / `find_entities(role, texts)`: GLiNER entity finder.
 
 Models are addressed by **role** from config/models.yaml (e.g. "answer_writer"), never by name.
 Every call logs model name, time taken and token / item count.
@@ -219,6 +220,46 @@ def embed(role: str, texts: list[str], batch_size: int = 32) -> list[list[float]
     )
     _log_call(get_models_config()[role].name, started, items=len(texts))
     return vectors.tolist()
+
+
+@lru_cache
+def load_gliner(role: str):  # noqa: ANN201 - heavy import kept lazy
+    """GLiNER with its encoder's tokenizer and config from the pinned `<role>_encoder`.
+
+    The GLiNER repo holds only weights + gliner_config.json; left alone, GLiNER would fetch the
+    rest from the encoder repo's moving `main` branch. The config is rewritten to point at the
+    pinned copy instead.
+    """
+    from gliner import GLiNER
+    from huggingface_hub import snapshot_download
+
+    spec, encoder = get_models_config()[role], get_models_config()[f"{role}_encoder"]
+    token = get_settings().hf_token
+    started = time.perf_counter()
+    model_dir = Path(snapshot_download(spec.name, revision=spec.revision, token=token))
+    config = json.loads((model_dir / "gliner_config.json").read_text())
+    config["model_name"] = snapshot_download(
+        encoder.name, revision=encoder.revision, token=token, allow_patterns=encoder.files
+    )
+    with tempfile.TemporaryDirectory() as tmp:
+        for file in model_dir.iterdir():
+            if file.name != "gliner_config.json":
+                (Path(tmp) / file.name).symlink_to(file)
+        (Path(tmp) / "gliner_config.json").write_text(json.dumps(config))
+        model = GLiNER.from_pretrained(tmp, local_files_only=True, map_location=device())
+    _log_call(spec.name, started, loaded_on=device())
+    return model
+
+
+def find_entities(role: str, texts: list[str]) -> list[list[tuple[str, str, float]]]:
+    """(name, label, score) hits per text for the role's labels; hits under threshold dropped."""
+    if not texts:
+        return []
+    spec = get_models_config()[role]
+    started = time.perf_counter()
+    hits = load_gliner(role).inference(texts, spec.labels, threshold=spec.threshold)
+    _log_call(spec.name, started, items=len(texts))
+    return [[(h["text"], h["label"], h["score"]) for h in text_hits] for text_hits in hits]
 
 
 def rerank(role: str, query: str, candidates: list[str]) -> list[float]:

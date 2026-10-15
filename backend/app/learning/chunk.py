@@ -16,7 +16,8 @@ from datetime import datetime
 from app.config.settings import get_settings
 from app.db.schema import Item
 
-MESSAGE = re.compile(r"(?=^(?:slack:\w+|unknown): )", re.M)  # a message line in a Slack thread
+AUTHOR = re.compile(r"^(?:slack:\w+|unknown): ", re.M)  # starts each message in a Slack thread
+MESSAGE = re.compile(f"(?={AUTHOR.pattern})", re.M)  # a message line in a Slack thread
 CODE = re.compile(r"(```.*?```)", re.S)  # fenced code block
 SENTENCE = re.compile(r"(?<=\n)|(?<=[.!?])(?=\s)")
 WORD = re.compile(r"(?<=\s)(?=\S)")

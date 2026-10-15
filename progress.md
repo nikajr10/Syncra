@@ -5,10 +5,38 @@ Live record of what has been built. Agents add an entry here after every task (f
 ## Current status
 
 - **Current phase:** Phase 3 — Understand
-- **Next task:** 3.1 — Entity finder (GLiNER) (3.2 Decision reader prompt and 3.4 Embedder can run in parallel)
-- **Completed tasks:** 0.1–0.6 (Phase 0 complete), 1.1–1.6 (Phase 1 complete), 2.1–2.3 (Phase 2 complete)
+- **Next task:** 3.2 — Decision reader prompt (3.4 Embedder can run in parallel)
+- **Completed tasks:** 0.1–0.6 (Phase 0 complete), 1.1–1.6 (Phase 1 complete), 2.1–2.3 (Phase 2 complete), 3.1
 
 ## Log
+
+### Task 3.1 — Entity finder (GLiNER)  ✅ done
+**Date:** 2026-10-15
+
+**Built**
+- `app/learning/entities.py`: `find_entities(texts)` returns, per text, `FoundEntity(name, type, score)` once per (name, type) with its best score. Slack thread author prefixes (`slack:U01: `) are removed first; otherwise GLiNER reports "slack" as a tool in every thread.
+- Gateway: `load_gliner(role)` (cached) and `find_entities(role, texts)` (one batched GLiNER `inference` call with the role's labels and threshold; logs time and item count).
+- `config/models.yaml`: `entity_finder` got `labels: [person, service, tool, project]` and `threshold: 0.5`. New role `entity_finder_encoder` (`microsoft/deberta-v3-small`, pinned) with `files:` = tokenizer + config only. `ModelSpec` gained `files`, `labels`, `threshold`; `make download-models` downloads only a model's `files` when set.
+- New dependencies: `gliner>=0.2.29`, which caps `transformers<5.17` (pip moved transformers 5.19 → 5.16.1; sentence-transformers and SetFit accept it), and `protobuf` (transformers 5 needs it to read DeBERTa's sentencepiece tokenizer).
+- Tests: real GLiNER on a sample PR and a Slack thread finds the expected people, services, tools and projects; repeated mentions collapse to one; author prefixes are not entities; "thanks!" gives nothing; labels and threshold come from config.
+
+**Key files**
+- `backend/app/learning/entities.py`, `backend/app/models/gateway.py`, `backend/config/models.yaml`, `backend/tests/test_entities.py`
+
+**Decisions**
+- Entity types are `entity_finder.labels` in models.yaml; the unused `ENTITY_TYPES` constant was removed from `schema.py`. Plain labels: descriptive wordings ("software service", "technology", "internal service" …) were no better on sample text.
+- `threshold: 0.5` (GLiNER's default) had the best precision; 0.3–0.4 added hits like `p99` (project) and `cc` (person).
+- The GLiNER repo holds only weights; its tokenizer and encoder config come from `microsoft/deberta-v3-small`, which GLiNER would fetch from the moving `main` branch. `load_gliner` points it at the pinned `entity_finder_encoder` snapshot instead (every HF download stays pinned). Swapping GLiNER means updating both roles.
+- Names are kept as written (`PaymentService`, `gRPC`); normalising and merging them is Task 4.1.
+
+**How to run / test**
+- `make install` (new deps) · `make download-models` (adds 2.5 MB of encoder files) · `make test`
+
+**Known issues / TODO**
+- gliner_small mixes up service and tool (RabbitMQ and gRPC → service, billing-api → tool) and sometimes tags metrics (`p99`) as projects. Task 4.1 should merge one name across types. A bigger GLiNER (`urchade/gliner_medium-v2.1` / `gliner_large-v2.1`) may type better: change `entity_finder` (with its revision) and re-run the tests.
+- GLiNER reads at most 384 words per text, and every punctuation mark counts as a word; in code-heavy chunks, entities past that point are missed.
+- Loading logs a transformers warning about an "incorrect regex pattern" in the DeBERTa tokenizer. It is a false alarm (tokens match sentencepiece exactly).
+- Slack mentions stay raw (`<@U03>`) and are not found as people; Task 4.1 maps them through identities.
 
 ### Task 2.3 — Chunker  ✅ done
 **Date:** 2026-10-15

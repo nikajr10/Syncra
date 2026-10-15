@@ -34,6 +34,6 @@ def download_all(download: Callable[..., str] | None = None) -> tuple[list[str],
             skipped.append(spec.name)
             continue
         log.info("downloading %s (%s)", spec.name, role)
-        download(repo_id=spec.name, revision=spec.revision, token=token)
+        download(repo_id=spec.name, revision=spec.revision, token=token, allow_patterns=spec.files)
         done.append(spec.name)
     return done, skipped

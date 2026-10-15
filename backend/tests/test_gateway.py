@@ -99,9 +99,13 @@ def test_download_all_fetches_every_hf_model_and_skips_gated(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     fetched: list[str] = []
+    files: dict[str, list[str] | None] = {}
 
-    def fake_download(repo_id: str, revision: str | None, token: str | None) -> str:
+    def fake_download(
+        repo_id: str, revision: str | None, token: str | None, allow_patterns: list[str] | None
+    ) -> str:
         fetched.append(repo_id)
+        files[repo_id] = allow_patterns
         return str(tmp_path)
 
     monkeypatch.setattr(download.get_settings(), "hf_token", None)
@@ -111,3 +115,6 @@ def test_download_all_fetches_every_hf_model_and_skips_gated(
     assert set(done) == set(fetched) == expected
     assert len(fetched) == len(expected)  # each repo once, even if used by several roles
     assert skipped == ["meta-llama/Llama-Prompt-Guard-2-86M"]
+    encoder = download.hf_models()["entity_finder_encoder"]
+    assert files[encoder.name] == ["config.json", "spm.model", "tokenizer_config.json"]
+    assert files["urchade/gliner_small-v2.1"] is None  # whole repo
