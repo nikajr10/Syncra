@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Syncra</title>
+  <meta name="description" content="Syncra — organizational intelligence prototype">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Roboto+Mono&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,400,0..1,0&display=block">
+  <link rel="stylesheet" href="styles.css">
+  <script>
+    // Apply theme before paint to avoid a flash
+    try { var t = localStorage.getItem('syncra-theme'); if (t) document.documentElement.dataset.theme = t; else if (matchMedia('(prefers-color-scheme: dark)').matches) document.documentElement.dataset.theme = 'dark'; } catch (e) {}
+  </script>
+</head>
+<body>
+  <a href="#app" class="sr-only">Skip to content</a>
+  <div id="app"></div>
+  <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+  <div id="live" class="sr-only" aria-live="polite"></div>
+  <script src="app.js"></script>
+</body>
+</html>
