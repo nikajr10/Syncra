@@ -1,0 +1,42 @@
+"""Create the local databases named in DATABASE_URL and TEST_DATABASE_URL and enable pgvector.
+
+Usage (from backend/):  make db-init        (needs a running PostgreSQL with pgvector installed)
+"""
+
+import os
+
+import psycopg
+from dotenv import dotenv_values
+from sqlalchemy.engine import make_url
+
+from app.config.settings import BACKEND_DIR, get_settings
+
+
+def ensure_database(url_str: str) -> None:
+    url = make_url(url_str)
+    dsn = url.set(drivername="postgresql").render_as_string(hide_password=False)
+    admin_dsn = url.set(drivername="postgresql", database="postgres").render_as_string(
+        hide_password=False
+    )
+    with psycopg.connect(admin_dsn, autocommit=True) as conn:
+        exists = conn.execute(
+            "select 1 from pg_database where datname = %s", (url.database,)
+        ).fetchone()
+        if not exists:
+            conn.execute(f'CREATE DATABASE "{url.database}"')
+            print(f"created database {url.database}")
+    with psycopg.connect(dsn, autocommit=True) as conn:
+        conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
+        version = conn.execute(
+            "select extversion from pg_extension where extname = 'vector'"
+        ).fetchone()
+    print(f"{url.database}: ready (pgvector {version[0] if version else '?'})")
+
+
+if __name__ == "__main__":
+    env = {**dotenv_values(BACKEND_DIR / ".env"), **os.environ}
+    urls = [get_settings().database_url]
+    if env.get("TEST_DATABASE_URL"):
+        urls.append(env["TEST_DATABASE_URL"])
+    for u in urls:
+        ensure_database(u)

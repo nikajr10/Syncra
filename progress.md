@@ -4,11 +4,31 @@ Live record of what has been built. Agents add an entry here after every task (f
 
 ## Current status
 
-- **Current phase:** Phase 0 — Foundation
-- **Next task:** 0.6 — Background job runner
-- **Completed tasks:** 0.1, 0.2, 0.3, 0.4, 0.5
+- **Current phase:** Phase 1 — Collect and clean
+- **Next task:** 1.1 — Connector interface
+- **Completed tasks:** 0.1, 0.2, 0.3, 0.4, 0.5, 0.6 (Phase 0 complete)
 
 ## Log
+
+### Task 0.6 — Background job runner  ✅ done
+**Date:** 2026-10-15
+
+**Built**
+- `app/jobs/scheduler.py`: APScheduler `BlockingScheduler`; `build_scheduler()` registers the dummy `heartbeat` job on an interval of `SYNC_INTERVAL_MINUTES` (runs once at startup, then every interval; `max_instances=1`, `coalesce=True` so runs never overlap). `make worker` starts it.
+- Tests: the interval comes from config (and changes with the env), and a started worker fires the job and logs `heartbeat: worker alive`.
+
+**Key files**
+- `backend/app/jobs/scheduler.py`, `backend/tests/test_jobs.py`, `Makefile` target `worker`
+
+**Decisions**
+- **APScheduler 3 in-process, no Celery / broker.** One database is the rule; the `items.status` column is the work queue. Jobs are plain functions registered in `build_scheduler()`; Task 1.6 adds `sync_all_sources` there.
+- The worker is a separate process from the API (`make worker` vs `make run`).
+
+**How to run / test**
+- `make worker` (Ctrl-C to stop) · `make test`
+
+**Known issues / TODO**
+- Single worker process, no persisted job state. Fine while jobs are idempotent and re-run on the interval.
 
 ### Task 0.5 — Model gateway  ✅ done
 **Date:** 2026-10-15
@@ -73,26 +93,27 @@ Live record of what has been built. Agents add an entry here after every task (f
 **Date:** 2026-10-15
 
 **Built**
-- `backend/docker-compose.yml`: **PostgreSQL 17 + pgvector** (`pgvector/pgvector:pg17`) on host port **5436**, healthcheck, named volume; **Ollama** service behind the `ollama` compose profile.
-- `backend/scripts/init_db.sql`: enables `vector` in `syncra` and creates `syncra_test` (with `vector`) on first start.
-- `backend/scripts/pull_ollama_models.py` (`make pull-models`): pulls every `runtime: ollama` model in `config/models.yaml` (qwen3:4b, qwen3:8b). Both are pulled on the dev machine.
-- `backend/.env.example` lists every setting. `backend/.env` is a copy (gitignored).
-- Test drives the pull script with a fake `ollama` binary on PATH.
+- **Production** Docker setup (user decision: **no Docker for local development**): `backend/Dockerfile` (multi-stage, non-root, CPU torch by default, healthcheck) and `backend/docker-compose.yml` with `postgres` (`pgvector/pgvector:pg17`), `ollama` (`0.35.0`), `api` (runs migrations, then uvicorn) and `worker`. Named volumes for Postgres data, Ollama models and the Hugging Face cache.
+- Local development uses the developer's **own PostgreSQL + pgvector** (dev machine: Homebrew PostgreSQL 18 on port **5434**) and **native Ollama**. `make db-init` (`scripts/init_local_db.py`) creates the `syncra` and `syncra_test` databases and enables `vector`.
+- `backend/scripts/pull_ollama_models.py` (`make pull-models`): pulls every `runtime: ollama` model in `config/models.yaml` (qwen3:4b, qwen3:8b; both pulled on the dev machine). Test drives it with a fake `ollama` binary on PATH.
+- `backend/.env.example` lists every setting; `backend/.env` is the local copy (gitignored).
 
 **Key files**
-- `backend/docker-compose.yml`, `backend/scripts/init_db.sql`, `backend/scripts/pull_ollama_models.py`, `backend/.env.example`, `backend/tests/test_pull_ollama_models.py`
+- `backend/Dockerfile`, `backend/.dockerignore`, `backend/docker-compose.yml`, `backend/scripts/init_db.sql` (compose first start: enables `vector`), `backend/scripts/init_local_db.py`, `backend/scripts/pull_ollama_models.py`, `backend/.env.example`, `backend/tests/test_pull_ollama_models.py`
 
 **Decisions**
-- Compose project name is pinned to `syncra` (`name: syncra`). The default (folder name `backend`) collided with another project on the dev machine.
-- Host port **5436**: ports 5432–5435 are taken by other Postgres servers on the dev machine. Change `POSTGRES_PORT` + URLs in `.env` if needed.
-- **Ollama runs natively on macOS** (Docker has no GPU there); the compose `ollama` service is for Linux: `docker compose --profile ollama up -d`. The app only needs `OLLAMA_BASE_URL`.
-- DB credentials for local dev / DBeaver: host `localhost`, port `5436`, db `syncra`, user `syncra`, password `syncra`. Tests use db `syncra_test` on the same server.
+- **Do not start Docker locally.** Dev = local Postgres + native Ollama; Docker = production only. The compose Postgres was verified once (Postgres 17 + pgvector 0.8.7 came up with the extension enabled) and torn down; the image build has not been run.
+- Compose project name is pinned (`name: syncra`); the default (folder name `backend`) collided with another project's containers on the dev machine.
+- In containers the API / worker get `DATABASE_URL` and `OLLAMA_BASE_URL` pointing at the `postgres` / `ollama` services (set in compose), `DEVICE=cpu`, `HF_HOME=/models`.
+- DBeaver (local dev): host `localhost`, port `5434`, db `syncra`, user = macOS user, no password. Tests use `syncra_test` on the same server (`TEST_DATABASE_URL` in `.env`).
 
 **How to run / test**
-- `cd backend && cp .env.example .env && docker compose up -d && make pull-models && make test`
+- Local: `make db-init && make migrate && make pull-models && make download-models && make test`
+- Production: README section "Production (Docker)".
 
 **Known issues / TODO**
-- `docker compose up` on macOS starts only Postgres (Ollama is native); on Linux use the profile to start both.
+- `docker compose build` has not been exercised (no local Docker by decision); the first production deploy must build and smoke-test the image.
+- Ollama image tag `0.35.0` is assumed to exist on Docker Hub (matches the local version); bump if it does not.
 
 ### Task 0.3 — Configuration  ✅ done
 **Date:** 2026-10-15
@@ -114,7 +135,7 @@ Live record of what has been built. Agents add an entry here after every task (f
 - Models are addressed by role name (`entity_finder`, `decision_reader`, `embedder`, `entity_linker`, `triage_base`, `presidio_nlp`, `question_rewriter`, `prompt_guard`, `intent_router_base`, `reranker`, `answer_writer`, `claim_checker`). Change models in yaml, not code.
 - Ollama entries use the full tag as `name` (`qwen3:8b`); Hugging Face entries use the repo id, optional `revision`, `gated: true` when a token is needed.
 - Env vars beat `.env`; empty env values are ignored. Only `DATABASE_URL` is required.
-- Tests never touch the dev DB: `conftest.py` sets `DATABASE_URL` to `TEST_DATABASE_URL` (default `postgresql+psycopg://syncra:syncra@localhost:5436/syncra_test`).
+- Tests never touch the dev DB: `conftest.py` sets `DATABASE_URL` to `TEST_DATABASE_URL` (from the environment or `backend/.env`; fallback `postgresql+psycopg://<mac user>@localhost:5434/syncra_test`).
 
 **How to run / test**
 - `cd backend && make test`

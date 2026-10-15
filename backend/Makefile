@@ -1,4 +1,4 @@
-.PHONY: install run worker test lint fmt pull-models download-models migrate
+.PHONY: install run worker test lint fmt pull-models download-models db-init migrate
 
 PYTHON ?= python3.12
 
@@ -27,6 +27,9 @@ pull-models:
 
 download-models:
 	.venv/bin/python scripts/download_hf_models.py
+
+db-init:
+	.venv/bin/python scripts/init_local_db.py
 
 migrate:
 	.venv/bin/alembic upgrade head

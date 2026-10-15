@@ -1,42 +1,77 @@
-# Local services. Reads backend/.env (copy .env.example).
+# Production deployment (Linux host): Postgres + pgvector, Ollama, API, worker.
+# Not used for local development (local dev runs against your own Postgres and native Ollama).
 #
-#   docker compose up -d                   -> Postgres + pgvector (host port POSTGRES_PORT, default 5436)
-#   docker compose --profile ollama up -d  -> also Ollama (Linux only; on macOS Docker has no GPU,
-#                                             so run Ollama natively and leave this profile off)
+#   cp .env.example .env            # set POSTGRES_PASSWORD at least
+#   docker compose up -d --build
+#   docker compose exec ollama ollama pull qwen3:4b && docker compose exec ollama ollama pull qwen3:8b
+#   docker compose run --rm api python scripts/download_hf_models.py
 #
-# Explicit project name: the default (folder name "backend") collides with other projects.
 name: syncra
+
+x-backend: &backend
+  build: .
+  image: syncra-backend
+  env_file: .env
+  environment:
+    DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-syncra}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-syncra}
+    OLLAMA_BASE_URL: http://ollama:11434
+    DEVICE: ${DEVICE:-cpu}  # cuda only with an NVIDIA image + the GPU reservation below
+  volumes:
+    - hf_models:/models
+  restart: unless-stopped
 
 services:
   postgres:
     image: pgvector/pgvector:pg17
-    container_name: syncra-postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-syncra}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-syncra}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       POSTGRES_DB: ${POSTGRES_DB:-syncra}
-    ports:
-      - "${POSTGRES_PORT:-5436}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./scripts/init_db.sql:/docker-entrypoint-initdb.d/init_db.sql:ro
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432" # admin access from the host only (DBeaver via SSH tunnel)
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-syncra} -d ${POSTGRES_DB:-syncra}"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
+      interval: 10s
+      timeout: 5s
+      retries: 12
 
   ollama:
-    image: ollama/ollama:latest
-    container_name: syncra-ollama
+    image: ollama/ollama:0.35.0 # keep in step with the version tested locally
     restart: unless-stopped
-    profiles: ["ollama"]
-    ports:
-      - "${OLLAMA_PORT:-11434}:11434"
     volumes:
       - ollama_data:/root/.ollama
+    # NVIDIA GPU: install the NVIDIA Container Toolkit and uncomment.
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+  api:
+    <<: *backend
+    command: sh -c "alembic upgrade head && uvicorn app.api.main:app --host 0.0.0.0 --port 8000"
+    ports:
+      - "${API_PORT:-8000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+
+  worker:
+    <<: *backend
+    command: python -m app.jobs.scheduler
+    depends_on:
+      api:
+        condition: service_healthy # api ran the migrations
 
 volumes:
   postgres_data:
   ollama_data:
+  hf_models:
