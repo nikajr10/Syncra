@@ -447,8 +447,8 @@ flowchart LR
 
 **Phase 1 — Collect and clean**
 - [x] 1.1 Connector interface
-- [ ] 1.2 GitHub connector
-- [ ] 1.3 Jira connector
+- [x] 1.2 GitHub connector
+- [x] 1.3 Jira connector
 - [ ] 1.4 Slack connector
 - [ ] 1.5 Privacy scrubber (Presidio)
 - [ ] 1.6 Scheduled sync job

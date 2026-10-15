@@ -5,10 +5,58 @@ Live record of what has been built. Agents add an entry here after every task (f
 ## Current status
 
 - **Current phase:** Phase 1 — Collect and clean
-- **Next task:** 1.2 — GitHub connector
-- **Completed tasks:** 0.1–0.6 (Phase 0 complete), 1.1
+- **Next task:** 1.4 — Slack connector
+- **Completed tasks:** 0.1–0.6 (Phase 0 complete), 1.1, 1.2, 1.3
 
 ## Log
+
+### Task 1.3 — Jira connector  ✅ done
+**Date:** 2026-10-15
+
+**Built**
+- `JiraConnector(project_key)` (`app/learning/connectors/jira.py`): Jira Cloud `GET /rest/api/3/search/jql` with `nextPageToken` paging and JQL `project = "KEY" [AND updated >= "<cursor>"] ORDER BY updated ASC`. JQL has no timezone syntax, so the bound is rendered in the API user's Jira timezone (`/rest/api/3/myself`).
+- Issues → `issue` items (title = summary; text = `Type · Status · Assignee` header + flattened description). Comments from the search payload → `comment` items with `parent_external_id` = issue key. 429 → wait `retry-after`, retry.
+- `adf_to_text()` flattens Atlassian Document Format (paragraphs, headings, lists, code, mentions).
+- Cursor = latest `updated` in UTC (`%Y-%m-%dT%H:%M:%S.%f%z`). Tag: `jira:project:<KEY>`.
+- Settings `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN` (basic auth).
+
+**Key files**
+- `backend/app/learning/connectors/jira.py`, `backend/tests/test_jira_connector.py`
+
+**Decisions**
+- Item ids: issue key (`PAY-12`), `comment:<id>`; author `jira:<accountId>`; link `<base>/browse/<key>`.
+- Same test pattern as GitHub: `transport=httpx.MockTransport(fake)` and `sleep=` injected.
+
+**How to run / test**
+- `make test`
+
+**Known issues / TODO**
+- Comments come from the search payload (Jira caps them per issue); very long comment threads need `/issue/{key}/comment` paging later.
+- The minute-precision JQL bound re-fetches the last minute each run (deduped by content hash).
+
+### Task 1.2 — GitHub connector  ✅ done
+**Date:** 2026-10-15
+
+**Built**
+- `GitHubConnector(repo)` (`app/learning/connectors/github.py`): issues + PRs (`/issues?state=all&sort=updated&since=`), PR reviews (`/pulls/{n}/reviews`; approved / changes-requested or with a body), issue and PR conversation comments (`/issues/comments`), inline review comments (`/pulls/comments`), commits (`/commits?since=`).
+- `Link`-header paging; primary and secondary rate limits (403/429 with `x-ratelimit-remaining: 0` or `retry-after`) wait (≤ 15 min, injectable `sleep`) and retry.
+- Cursor = latest `updated_at` seen (`YYYY-MM-DDTHH:MM:SSZ`), passed back as `since`.
+- Permissions: private repo → `github:repo:<owner/repo>`; public → `public` + the repo tag.
+- Settings `GITHUB_TOKEN`, `GITHUB_API_URL`.
+
+**Key files**
+- `backend/app/learning/connectors/github.py`, `backend/tests/test_github_connector.py`
+
+**Decisions**
+- Item ids: `#<number>` (issue or PR; GitHub numbers are shared), `review:<id>`, `comment:<id>`, `review_comment:<id>`, commit sha. Comments and reviews point at `#<number>`.
+- Review items read `approved: LGTM` (state + body); inline review comments carry the file path as `title`.
+- Connectors take `transport=` (httpx.MockTransport) and `sleep=` so tests never touch the network or wait.
+
+**How to run / test**
+- `make test`
+
+**Known issues / TODO**
+- One `/pulls/{n}/reviews` call per updated PR (N+1); acceptable at the 15-minute cadence.
 
 ### Task 1.1 — Connector interface  ✅ done
 **Date:** 2026-10-15
