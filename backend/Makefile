@@ -1,4 +1,4 @@
-.PHONY: install run test lint fmt
+.PHONY: install run test lint fmt pull-models
 
 PYTHON ?= python3.12
 
@@ -18,3 +18,6 @@ lint:
 
 fmt:
 	.venv/bin/ruff format . && .venv/bin/ruff check --fix .
+
+pull-models:
+	.venv/bin/python scripts/pull_ollama_models.py

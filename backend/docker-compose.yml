@@ -1,0 +1,42 @@
+# Local services. Reads backend/.env (copy .env.example).
+#
+#   docker compose up -d                   -> Postgres + pgvector (host port POSTGRES_PORT, default 5436)
+#   docker compose --profile ollama up -d  -> also Ollama (Linux only; on macOS Docker has no GPU,
+#                                             so run Ollama natively and leave this profile off)
+#
+# Explicit project name: the default (folder name "backend") collides with other projects.
+name: syncra
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: syncra-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-syncra}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-syncra}
+      POSTGRES_DB: ${POSTGRES_DB:-syncra}
+    ports:
+      - "${POSTGRES_PORT:-5436}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init_db.sql:/docker-entrypoint-initdb.d/init_db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-syncra} -d ${POSTGRES_DB:-syncra}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: syncra-ollama
+    restart: unless-stopped
+    profiles: ["ollama"]
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+
+volumes:
+  postgres_data:
+  ollama_data:
