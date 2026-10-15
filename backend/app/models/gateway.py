@@ -1,0 +1,226 @@
+"""Model gateway: every model call goes through here.
+
+- `ollama()` -> `OllamaClient`: generate (normal + streaming), JSON mode, timeout, retry.
+- `load_sentence_transformer(role)` / `load_cross_encoder(role)`: Hugging Face models loaded once,
+  cached in memory, on GPU (cuda / mps) when available.
+
+Models are addressed by **role** from config/models.yaml (e.g. "answer_writer"), never by name.
+Every call logs model name, time taken and token / item count.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import time
+from collections.abc import Iterator
+from functools import lru_cache
+from typing import Any
+
+import httpx
+
+from app.config.settings import get_models_config, get_settings
+
+log = logging.getLogger("syncra.models")
+
+
+class OllamaError(RuntimeError):
+    """Ollama was unreachable or returned a bad response after all retries."""
+
+
+def _log_call(model: str, started: float, **counts: Any) -> None:
+    ms = (time.perf_counter() - started) * 1000
+    extra = " ".join(f"{k}={v}" for k, v in counts.items() if v is not None)
+    log.info("model=%s took=%.0fms %s", model, ms, extra)
+
+
+class OllamaClient:
+    def __init__(
+        self,
+        base_url: str | None = None,
+        timeout: float | None = None,
+        retries: int = 2,
+        transport: httpx.BaseTransport | None = None,
+    ) -> None:
+        settings = get_settings()
+        self.retries = retries
+        self._client = httpx.Client(
+            base_url=base_url or settings.ollama_base_url,
+            timeout=timeout or settings.ollama_timeout_seconds,
+            transport=transport,
+        )
+
+    @staticmethod
+    def _body(
+        role: str,
+        prompt: str,
+        *,
+        system: str | None,
+        json_mode: bool | dict[str, Any],
+        options: dict[str, Any] | None,
+        think: bool,
+        stream: bool,
+    ) -> dict[str, Any]:
+        body: dict[str, Any] = {
+            "model": get_models_config()[role].name,
+            "prompt": prompt,
+            "stream": stream,
+            "think": think,  # Qwen3 "thinking" off by default: faster, and JSON stays clean
+        }
+        if system:
+            body["system"] = system
+        if json_mode:
+            body["format"] = json_mode if isinstance(json_mode, dict) else "json"
+        if options:
+            body["options"] = options
+        return body
+
+    def generate(
+        self,
+        role: str,
+        prompt: str,
+        *,
+        system: str | None = None,
+        json_mode: bool | dict[str, Any] = False,
+        options: dict[str, Any] | None = None,
+        think: bool = False,
+    ) -> str:
+        """Return the full response text. `json_mode=True` (or a JSON schema) forces JSON output."""
+        body = self._body(
+            role, prompt, system=system, json_mode=json_mode, options=options, think=think,
+            stream=False,
+        )  # fmt: skip
+        for attempt in range(self.retries + 1):
+            started = time.perf_counter()
+            try:
+                response = self._client.post("/api/generate", json=body)
+                response.raise_for_status()
+                data = response.json()
+                text = data["response"]
+            except (httpx.HTTPError, ValueError, KeyError) as exc:
+                if attempt == self.retries:
+                    raise OllamaError(f"Ollama generate failed for {body['model']}: {exc}") from exc
+                log.warning("ollama %s failed (%s), retrying", body["model"], exc)
+                continue
+            _log_call(
+                body["model"],
+                started,
+                prompt_tokens=data.get("prompt_eval_count"),
+                tokens=data.get("eval_count"),
+            )
+            return text
+        raise AssertionError("unreachable")
+
+    def generate_json(self, role: str, prompt: str, **kwargs: Any) -> Any:
+        """`generate` in JSON mode, parsed. Raises `ValueError` when the model's JSON is invalid."""
+        kwargs.setdefault("json_mode", True)
+        return json.loads(self.generate(role, prompt, **kwargs))
+
+    def stream(
+        self,
+        role: str,
+        prompt: str,
+        *,
+        system: str | None = None,
+        options: dict[str, Any] | None = None,
+        think: bool = False,
+    ) -> Iterator[str]:
+        """Yield response text piece by piece. Retries only if nothing was yielded yet."""
+        body = self._body(
+            role, prompt, system=system, json_mode=False, options=options, think=think,
+            stream=True,
+        )  # fmt: skip
+        for attempt in range(self.retries + 1):
+            started = time.perf_counter()
+            yielded = False
+            try:
+                with self._client.stream("POST", "/api/generate", json=body) as response:
+                    response.raise_for_status()
+                    for line in response.iter_lines():
+                        if not line:
+                            continue
+                        data = json.loads(line)
+                        if data.get("done"):
+                            _log_call(
+                                body["model"],
+                                started,
+                                prompt_tokens=data.get("prompt_eval_count"),
+                                tokens=data.get("eval_count"),
+                            )
+                            return
+                        yielded = True
+                        yield data.get("response", "")
+                return
+            except (httpx.HTTPError, ValueError) as exc:
+                if yielded or attempt == self.retries:
+                    raise OllamaError(f"Ollama stream failed for {body['model']}: {exc}") from exc
+                log.warning("ollama %s stream failed (%s), retrying", body["model"], exc)
+
+
+@lru_cache
+def ollama() -> OllamaClient:
+    return OllamaClient()
+
+
+# --- Hugging Face ---------------------------------------------------------------------------
+
+
+@lru_cache
+def device() -> str:
+    """cuda > mps > cpu, unless DEVICE is set explicitly."""
+    configured = get_settings().device
+    if configured != "auto":
+        return configured
+    import torch
+
+    if torch.cuda.is_available():
+        return "cuda"
+    if torch.backends.mps.is_available():
+        return "mps"
+    return "cpu"
+
+
+@lru_cache
+def load_sentence_transformer(role: str):  # noqa: ANN201 - heavy import kept lazy
+    from sentence_transformers import SentenceTransformer
+
+    spec = get_models_config()[role]
+    started = time.perf_counter()
+    model = SentenceTransformer(
+        spec.name, revision=spec.revision, device=device(), token=get_settings().hf_token
+    )
+    _log_call(spec.name, started, loaded_on=device())
+    return model
+
+
+@lru_cache
+def load_cross_encoder(role: str):  # noqa: ANN201 - heavy import kept lazy
+    from sentence_transformers import CrossEncoder
+
+    spec = get_models_config()[role]
+    started = time.perf_counter()
+    model = CrossEncoder(
+        spec.name, revision=spec.revision, device=device(), token=get_settings().hf_token
+    )
+    _log_call(spec.name, started, loaded_on=device())
+    return model
+
+
+def embed(role: str, texts: list[str], batch_size: int = 32) -> list[list[float]]:
+    """Normalised embeddings for `texts` with the model configured for `role`."""
+    started = time.perf_counter()
+    model = load_sentence_transformer(role)
+    vectors = model.encode(
+        texts, batch_size=batch_size, normalize_embeddings=True, convert_to_numpy=True
+    )
+    _log_call(get_models_config()[role].name, started, items=len(texts))
+    return vectors.tolist()
+
+
+def rerank(role: str, query: str, candidates: list[str]) -> list[float]:
+    """One relevance score per candidate from the cross-encoder configured for `role`."""
+    started = time.perf_counter()
+    model = load_cross_encoder(role)
+    scores = model.predict([(query, c) for c in candidates], convert_to_numpy=True)
+    _log_call(get_models_config()[role].name, started, items=len(candidates))
+    return [float(s) for s in scores]

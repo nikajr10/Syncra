@@ -5,10 +5,37 @@ Live record of what has been built. Agents add an entry here after every task (f
 ## Current status
 
 - **Current phase:** Phase 0 — Foundation
-- **Next task:** 0.5 — Model gateway (then 0.6)
-- **Completed tasks:** 0.1, 0.2, 0.3, 0.4
+- **Next task:** 0.6 — Background job runner
+- **Completed tasks:** 0.1, 0.2, 0.3, 0.4, 0.5
 
 ## Log
+
+### Task 0.5 — Model gateway  ✅ done
+**Date:** 2026-10-15
+
+**Built**
+- `app/models/gateway.py`: `OllamaClient` (`generate`, `generate_json`, `stream`; JSON mode via Ollama `format`; timeout + retries from settings; Qwen3 thinking off by default), `ollama()` cached client, `device()` (cuda > mps > cpu, or `DEVICE` setting), cached `load_sentence_transformer(role)` / `load_cross_encoder(role)`, helpers `embed(role, texts)` (normalised) and `rerank(role, query, candidates)`.
+- Every call logs `model=<name> took=<ms> prompt_tokens=… tokens=…` (Ollama) or `items=…` (HF) on logger `syncra.models`.
+- `app/models/download.py` + `scripts/download_hf_models.py` (`make download-models`): downloads every `runtime: huggingface` model once; gated models are skipped with a warning unless `HF_TOKEN` is set.
+- Tests: mocked Ollama (`httpx.MockTransport`) for generate / JSON / retry / stream; real tiny HF model (`all-MiniLM-L6-v2`, cached) loaded once and embedding; download logic with a fake downloader.
+
+**Key files**
+- `backend/app/models/gateway.py`, `backend/app/models/download.py`, `backend/scripts/download_hf_models.py`, `backend/tests/test_gateway.py`
+
+**Decisions**
+- Call models by **role**: `ollama().generate("answer_writer", prompt)`, `embed("embedder", texts)`, `rerank("reranker", q, docs)`. Never import `sentence_transformers` or call Ollama outside `app/models/`.
+- Ollama requests set `think: false` (Qwen3) unless `think=True` is passed; JSON mode = `json_mode=True` or a JSON-schema dict.
+- `stream()` retries only before the first token; `generate()` retries `retries` times (default 2) on HTTP / bad-JSON errors, then raises `OllamaError`.
+- New loaders for other model types (GLiNER, SetFit, transformers pipelines) go in `gateway.py` as `@lru_cache` functions taking a role.
+- `DEVICE=auto` picks the GPU (`mps` on Apple Silicon); set `DEVICE=cpu` if a model misbehaves on MPS.
+- `httpx` is a runtime dependency now (Ollama client; connectors will reuse it).
+
+**How to run / test**
+- `make download-models` · `make test` (the HF test takes ~5 s after the first run)
+
+**Known issues / TODO**
+- `meta-llama/Llama-Prompt-Guard-2-86M` is gated: accept the licence on Hugging Face and set `HF_TOKEN` before Task 5.4.
+- First `make test` after install is slow (~1 min) while torch / the model warm up.
 
 ### Task 0.4 — Database schema and migrations  ✅ done
 **Date:** 2026-10-15

@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://localhost:11434"
     ollama_timeout_seconds: float = 120.0
     hf_token: str | None = None  # only needed for gated Hugging Face models
+    device: str = "auto"  # auto | cpu | mps | cuda — where Hugging Face models run
 
     # --- key numbers (description.md §9) ---
     sync_interval_minutes: int = 15

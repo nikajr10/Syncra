@@ -1,4 +1,4 @@
-.PHONY: install run test lint fmt pull-models
+.PHONY: install run worker test lint fmt pull-models download-models migrate
 
 PYTHON ?= python3.12
 
@@ -9,6 +9,9 @@ install:
 
 run:
 	.venv/bin/uvicorn app.api.main:app --reload
+
+worker:
+	.venv/bin/python -m app.jobs.scheduler
 
 test:
 	.venv/bin/pytest
@@ -21,6 +24,9 @@ fmt:
 
 pull-models:
 	.venv/bin/python scripts/pull_ollama_models.py
+
+download-models:
+	.venv/bin/python scripts/download_hf_models.py
 
 migrate:
 	.venv/bin/alembic upgrade head
