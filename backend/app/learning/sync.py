@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from datetime import UTC, datetime
 
-from sqlalchemy import func
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
+from app.db.engine import new_session
 from app.db.schema import Item, Source, SyncCursor
+from app.learning.connectors import build_connector
 from app.learning.connectors.base import Connector, RawItem
 
 log = logging.getLogger("syncra.learning")
@@ -79,10 +81,24 @@ def save_items(
     return changed
 
 
-def sync_source(session: Session, source: Source, connector: Connector) -> int:
-    """fetch_new(cursor) -> save items + new cursor. Returns rows inserted or changed."""
+def sync_source(
+    session: Session,
+    source: Source,
+    connector: Connector,
+    scrub: Callable[[RawItem], RawItem] | None = None,
+) -> int:
+    """fetch_new(cursor) -> scrub every item -> save items + new cursor, in one transaction.
+
+    `scrub` defaults to the Presidio scrubber (Task 1.5); nothing is stored unscrubbed.
+    Returns rows inserted or changed.
+    """
+    if scrub is None:
+        from app.learning.scrub import get_scrubber  # heavy import kept lazy
+
+        scrub = get_scrubber().scrub_item
     cursor = session.get(SyncCursor, source.id)
     items, next_cursor = connector.fetch_new(cursor.cursor if cursor else None)
+    items = [scrub(item) for item in items]
     changed = save_items(session, source, items, next_cursor)
     log.info(
         "sync %s %s: fetched=%d changed=%d cursor=%s",
@@ -93,3 +109,36 @@ def sync_source(session: Session, source: Source, connector: Connector) -> int:
         next_cursor,
     )
     return changed
+
+
+def sync_all_sources(
+    session_factory: Callable[[], Session] = new_session,
+    build: Callable[[Source], Connector] = build_connector,
+) -> dict[str, int | str]:
+    """The scheduled job (Task 1.6): every enabled source -> connector -> scrub -> save.
+
+    Each source runs in its own session. A failing source is logged, recorded in
+    `sources.last_error` and skipped; the others still run. Saved items have status "new",
+    which is the queue for Phase 2. Returns {source name: rows changed | error message}.
+    """
+    with session_factory() as session:
+        source_ids = session.scalars(
+            select(Source.id).where(Source.enabled.is_(True)).order_by(Source.id)
+        ).all()
+
+    results: dict[str, int | str] = {}
+    for source_id in source_ids:
+        with session_factory() as session:
+            source = session.get(Source, source_id)
+            if source is None:
+                continue
+            try:
+                results[source.name] = sync_source(session, source, build(source))
+            except Exception as exc:  # one bad source must not stop the others
+                session.rollback()
+                log.exception("sync failed for %s %s", source.kind, source.name)
+                source.last_error = f"{type(exc).__name__}: {exc}"[:2000]
+                session.commit()
+                results[source.name] = source.last_error
+    log.info("sync run finished: %d sources, %s", len(results), results)
+    return results

@@ -32,6 +32,19 @@ make test         # run the test suite (uses the syncra_test database)
 make lint         # ruff check + format check
 ```
 
+## Connect a source
+
+Put the credentials in `backend/.env` (`GITHUB_TOKEN`, `JIRA_BASE_URL` + `JIRA_EMAIL` + `JIRA_API_TOKEN`, `SLACK_BOT_TOKEN` + `SLACK_WORKSPACE_URL`) and insert one row per repo / project / channel into the `sources` table (a UI comes in Phase 9):
+
+```sql
+insert into sources (kind, name, external_id) values
+  ('github', 'acme/payments', 'acme/payments'),   -- owner/repo
+  ('jira',   'PAY',           'PAY'),             -- project key
+  ('slack',  '#eng-payments', 'C0123456789');     -- channel id
+```
+
+`make worker` then pulls new items every `SYNC_INTERVAL_MINUTES`, scrubs personal data and secrets, and stores them with status `new`.
+
 ## Production (Docker)
 
 `backend/Dockerfile` and `backend/docker-compose.yml` run the whole stack on a Linux host: Postgres + pgvector, Ollama, the API and the worker. They are not used for local development.

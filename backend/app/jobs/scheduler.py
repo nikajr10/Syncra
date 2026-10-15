@@ -17,19 +17,22 @@ from app.config.settings import get_settings
 log = logging.getLogger("syncra.jobs")
 
 
-def heartbeat() -> None:
-    """Dummy job (Task 0.6). Task 1.6 adds the real sync job next to it."""
-    log.info("heartbeat: worker alive, next run in %s min", get_settings().sync_interval_minutes)
+def sync_sources() -> None:
+    """Task 1.6: pull every connected source, scrub, store; queue items for Phase 2."""
+    from app.learning.sync import sync_all_sources  # heavy import kept lazy
+
+    results = sync_all_sources()
+    log.info("sync_sources: %d sources done", len(results))
 
 
 def build_scheduler() -> BlockingScheduler:
     minutes = get_settings().sync_interval_minutes
     scheduler = BlockingScheduler(timezone="UTC")
     scheduler.add_job(
-        heartbeat,
+        sync_sources,
         "interval",
         minutes=minutes,
-        id="heartbeat",
+        id="sync_sources",
         next_run_time=datetime.now(UTC),
         max_instances=1,
         coalesce=True,
@@ -42,7 +45,7 @@ def main() -> None:
     logging.basicConfig(
         level=settings.log_level, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
     )
-    log.info("worker starting; interval=%s min", settings.sync_interval_minutes)
+    log.info("worker starting; sync every %s min", settings.sync_interval_minutes)
     try:
         build_scheduler().start()
     except (KeyboardInterrupt, SystemExit):

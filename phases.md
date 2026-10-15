@@ -449,9 +449,9 @@ flowchart LR
 - [x] 1.1 Connector interface
 - [x] 1.2 GitHub connector
 - [x] 1.3 Jira connector
-- [ ] 1.4 Slack connector
-- [ ] 1.5 Privacy scrubber (Presidio)
-- [ ] 1.6 Scheduled sync job
+- [x] 1.4 Slack connector
+- [x] 1.5 Privacy scrubber (Presidio)
+- [x] 1.6 Scheduled sync job
 
 **Phase 2 — Sort and split**
 - [ ] 2.1 Triage training data

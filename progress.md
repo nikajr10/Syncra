@@ -4,11 +4,80 @@ Live record of what has been built. Agents add an entry here after every task (f
 
 ## Current status
 
-- **Current phase:** Phase 1 — Collect and clean
-- **Next task:** 1.4 — Slack connector
-- **Completed tasks:** 0.1–0.6 (Phase 0 complete), 1.1, 1.2, 1.3
+- **Current phase:** Phase 2 — Sort and split
+- **Next task:** 2.1 — Triage training data (2.3 Chunker can run in parallel)
+- **Completed tasks:** 0.1–0.6 (Phase 0 complete), 1.1–1.6 (Phase 1 complete)
 
 ## Log
+
+### Task 1.6 — Scheduled sync job  ✅ done
+**Date:** 2026-10-15
+
+**Built**
+- `build_connector(source)` registry (`app/learning/connectors/__init__.py`): `sources.kind` → GitHub / Jira / Slack connector built from `sources.external_id` (repo `owner/name`, project key, channel id) and the tokens in settings.
+- `sync_all_sources()` (`app/learning/sync.py`): every **enabled** source in its own session → connector → scrubber → `save_items`. A failing source is logged with a traceback, written to `sources.last_error`, and skipped; the others still run. Returns `{source name: rows changed | error}`.
+- Scheduler job `sync_sources` (replaces the Task 0.6 heartbeat) every `SYNC_INTERVAL_MINUTES`, first run at worker start.
+- Items land with `status = "new"` — that is the queue Phase 2 consumes. Duplicates: in-batch collapse + content-hash upsert (Task 1.1).
+- Tests: two sources, one broken → error recorded, other synced; second run stores nothing new; disabled sources skipped; registry builds the right class.
+
+**Key files**
+- `backend/app/learning/connectors/__init__.py`, `backend/app/learning/sync.py`, `backend/app/jobs/scheduler.py`, `backend/tests/test_sync_job.py`, `backend/tests/test_jobs.py`
+
+**Decisions**
+- Connecting a source = inserting a `sources` row (`kind`, `name`, `external_id`, `enabled`); Task 9.4 adds the UI. Credentials stay in `.env` (`GITHUB_TOKEN`, `JIRA_*`, `SLACK_BOT_TOKEN`), one set per deployment.
+- Tests inject `build=` (registry) and `session_factory=`; never monkeypatch connector modules.
+
+**How to run / test**
+- `make worker` (runs the sync immediately, then every 15 min) · `make test`
+
+**Known issues / TODO**
+- No per-source credentials yet (one GitHub token / Jira account / Slack bot per deployment).
+
+### Task 1.5 — Privacy scrubber (Presidio)  ✅ done
+**Date:** 2026-10-15
+
+**Built**
+- `Scrubber` (`app/learning/scrub.py`): Presidio `AnalyzerEngine` on spaCy `en_core_web_sm` (role `presidio_nlp` in `models.yaml`) + `AnonymizerEngine`. Masks `EMAIL_ADDRESS`, `PHONE_NUMBER`, `CREDIT_CARD`, `IBAN_CODE`, `US_SSN`, `IP_ADDRESS` and custom secret recognizers `AWS_ACCESS_KEY`, `GITHUB_TOKEN`, `SLACK_TOKEN`, `PRIVATE_KEY`, `CONNECTION_STRING`, `PASSWORD_ASSIGNMENT`, `JWT`. Each hit becomes `<ENTITY_TYPE>`.
+- `scrub_item()` cleans `title` and `text`; `sync_source()` scrubs every item **before** saving (default; tests may pass `scrub=`).
+- Tests: emails, phones, cards, AWS / GitHub / Slack tokens, private keys, connection strings, password assignments and JWTs are masked; `PaymentService`, `retry_limit`, `PAY-1234`, commit SHAs, versions, URLs, `settings.api_key`, `get_token()` and people's names are untouched; an integration test proves nothing unscrubbed reaches `items`.
+
+**Key files**
+- `backend/app/learning/scrub.py`, `backend/tests/test_scrub.py`; deps `presidio-analyzer`, `presidio-anonymizer`, `spacy` 3.8 + `en_core_web_sm` (installed from the spaCy release wheel in `pyproject.toml`)
+
+**Decisions**
+- **Person names are not masked** (the product is "who built what"). Only the entity list above is analysed, so Presidio's other recognisers (PERSON, LOCATION, DATE_TIME, URL …) never fire.
+- Unquoted secret values must be ≥ 8 chars, contain a digit and no `.`, `(`, `[`; quoted values ≥ 6 chars. That keeps code identifiers alive at the cost of missing unquoted digit-free passwords.
+- `get_scrubber()` is cached; loading spaCy costs ~1 s once per process.
+
+**How to run / test**
+- `make test`
+
+**Known issues / TODO**
+- IP addresses are masked, including internal ones; relax if that hurts answers about infrastructure.
+- No AWS secret-key detector without a `key=` prefix (40-char base64 looks like SHAs).
+
+### Task 1.4 — Slack connector  ✅ done
+**Date:** 2026-10-15
+
+**Built**
+- `SlackConnector(channel_id)` (`app/learning/connectors/slack.py`): `conversations.info` (skips `is_im` / `is_mpim` → DMs never stored), `conversations.history` (cursor paging; `oldest` = cursor − `SLACK_THREAD_LOOKBACK_DAYS`), `conversations.replies` for every thread parent that has new activity → **one `thread` item per thread** with replies in order (`slack:U1: text` lines, title = first line), standalone messages → `message`. Channel bookkeeping subtypes (`channel_join`, …) skipped; 429 → `retry-after`.
+- Cursor = latest `ts` seen (messages and replies). Tag `slack:channel:<ID>` (membership).
+- Settings `SLACK_BOT_TOKEN`, `SLACK_WORKSPACE_URL` (permalinks), `SLACK_API_URL`, `SLACK_THREAD_LOOKBACK_DAYS` (7).
+
+**Key files**
+- `backend/app/learning/connectors/slack.py`, `backend/tests/test_slack_connector.py`
+
+**Decisions**
+- Authors are Slack user ids (`slack:U0123`); display names are resolved later through identities (Tasks 4.1 / 5.1). Raw Slack markup (`<@U1>`, `<url|label>`) is kept.
+- Bot messages are stored (scrubbed) and left for SetFit triage (Phase 2) to drop, as `description.md` specifies.
+- A thread that gets new replies is re-emitted whole; the upsert replaces the stored text and resets it to `new`.
+
+**How to run / test**
+- `make test`
+
+**Known issues / TODO**
+- Replies added to threads older than the look-back window are missed until a full re-sync (clear the cursor).
+- Links need `SLACK_WORKSPACE_URL`; without it `link` is empty.
 
 ### Task 1.3 — Jira connector  ✅ done
 **Date:** 2026-10-15
