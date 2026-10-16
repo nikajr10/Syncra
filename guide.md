@@ -10,14 +10,12 @@ Docker (`backend/Dockerfile`, `backend/docker-compose.yml`) is only for producti
 
 ## 0. What you will install
 
-| Tool | Why |
-|---|---|
-| Homebrew | macOS package manager, installs everything else |
-| Git | to clone the code |
-| Python 3.12 | the backend is Python |
-| PostgreSQL 18 + pgvector | the database (pgvector stores AI embeddings) |
-| Ollama | runs the local LLMs (Qwen3) |
-| DBeaver | a GUI to look inside the database (optional but handy) |
+- **Homebrew**: the macOS package manager. It installs everything else.
+- **Git**: to clone the code.
+- **Python 3.12**: the backend is written in Python.
+- **PostgreSQL 18 + pgvector**: the database. pgvector lets it store AI embeddings.
+- **Ollama**: runs the local LLMs (Qwen3).
+- **DBeaver**: a window into the database, to look at the tables (optional but handy).
 
 ---
 
@@ -176,15 +174,13 @@ Run `make migrate` again any time someone adds a new migration (after a `git pul
 3. Choose **PostgreSQL** → **Next**.
 4. Fill the **Main** tab:
 
-   | Field | Value |
-   |---|---|
-   | Connect by | Host |
-   | Host | `localhost` |
-   | Port | your port from step 3 (`5432` or `5434`) |
-   | Database | `syncra` |
-   | Authentication | Database Native |
-   | Username | your `whoami` name |
-   | Password | *leave empty* |
+   - **Connect by**: Host
+   - **Host**: `localhost`
+   - **Port**: your port from step 3 (`5432` or `5434`)
+   - **Database**: `syncra`
+   - **Authentication**: Database Native
+   - **Username**: your `whoami` name
+   - **Password**: *leave it empty*
 
 5. Click **Test Connection…**. The first time, DBeaver asks to **download the PostgreSQL driver** → click **Download**.
    You should see "Connected".
@@ -272,19 +268,27 @@ Postgres (`brew services`) and Ollama keep running in the background.
 
 ## Troubleshooting
 
-| Problem | Fix |
-|---|---|
-| `python3.12: command not found` | `brew install python@3.12` |
-| `connection refused` / `could not connect to server` | Postgres isn't running: `brew services start postgresql@18`. Check the port in `.env` matches `show port;` |
-| `role "USER" does not exist` | You forgot to replace `USER` in `.env` with your `whoami` name |
-| `extension "vector" is not available` | `brew install pgvector`, then `brew services restart postgresql@18` and `make db-init` again |
-| `database "syncra" does not exist` | Run `make db-init` |
-| `relation "..." does not exist` | Run `make migrate` |
-| `No such file .venv/bin/...` | Run `make install` first |
-| Ollama errors / connection refused on 11434 | Start the Ollama app or `ollama serve` |
-| Port 8000 already in use | `lsof -i :8000` to find it, or run `.venv/bin/uvicorn app.api.main:app --reload --port 8001` |
-| Everything weird with packages | `rm -rf .venv && make install` |
-| `No trained triage classifier in …` | Run `make train-triage` |
+**`python3.12: command not found`**: install it with `brew install python@3.12`.
+
+**`connection refused` or `could not connect to server`**: Postgres isn't running. Start it with `brew services start postgresql@18`, and check that the port in `.env` matches what `show port;` says.
+
+**`role "USER" does not exist`**: you forgot to replace `USER` in `.env` with your `whoami` name.
+
+**`extension "vector" is not available`**: run `brew install pgvector`, then `brew services restart postgresql@18`, then `make db-init` again.
+
+**`database "syncra" does not exist`**: run `make db-init`.
+
+**`relation "..." does not exist`**: run `make migrate`.
+
+**`No such file .venv/bin/...`**: run `make install` first.
+
+**Ollama errors, or connection refused on port 11434**: start the Ollama app, or run `ollama serve`.
+
+**Port 8000 already in use**: find what's using it with `lsof -i :8000`, or run the API on another port with `.venv/bin/uvicorn app.api.main:app --reload --port 8001`.
+
+**`No trained triage classifier in …`**: run `make train-triage`.
+
+**Packages behaving strangely**: rebuild the venv with `rm -rf .venv && make install`.
 
 ---
 
@@ -299,4 +303,5 @@ Postgres (`brew services`) and Ollama keep running in the background.
 ---
 
 More docs: [`README.md`](README.md) · [`description.md`](description.md) (what Syncra is) ·
+[`flow.md`](flow.md) (how it works, end to end) · [`decision.md`](decision.md) (why it's built this way) ·
 [`phases.md`](phases.md) (task list) · [`progress.md`](progress.md) (what's done) · [`agent.md`](agent.md).

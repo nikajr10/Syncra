@@ -46,7 +46,7 @@ can't fix, give the exact fix.
    committed, the old value is still in the history. Add a README warning to **rotate every previously
    committed secret immediately**, and explain how to purge the history.
 
-**Deliver:** a table of every secret found: what it is | where it was | what it was moved to | rotate? (yes/no).
+**Deliver:** a list of every secret found, one short paragraph each: what it is, where it was, what it was moved to, and whether to rotate it (yes/no).
 
 ---
 
@@ -69,7 +69,7 @@ can't fix, give the exact fix.
 7. **Data deletion**: users must be able to delete their data. If there's no way, add a basic flow
    that removes or anonymizes all of a user's personal data.
 
-**Deliver:** a complete data map (what is collected | where it's stored | where it's sent | what you fixed).
+**Deliver:** a complete data map, one short paragraph per kind of data: what is collected, where it's stored, where it's sent, and what you fixed.
 
 ---
 
@@ -231,9 +231,11 @@ endpoints that leak system info.
 ## Output format
 
 1. **Executive summary**: the top 5 most critical risks.
-2. **Findings table**: `ID | Area (Secrets/Data/Frontend/Backend/AI/Infra) | Vulnerability | Severity (Critical/High/Medium/Low) | File:Line | Status (PASS/FAIL/N/A) | Fix`.
-   Every checklist item above appears, including PASS and N/A ones.
-3. **Secrets table** (section 1) and **personal-data map** (section 2).
+2. **Findings list**: one short paragraph per finding, giving its ID, area (Secrets/Data/Frontend/Backend/AI/Infra),
+   vulnerability, severity (Critical/High/Medium/Low), file:line, status (PASS/FAIL/N/A) and fix.
+   Every checklist item above appears, including PASS and N/A ones. Don't use markdown tables anywhere in the report:
+   short paragraphs and lists are easier to read.
+3. **Secrets list** (section 1) and **personal-data map** (section 2).
 4. **Attack paths**: for each Critical/High finding, what an attacker does, the damage, and the fix.
 5. **Corrected code** for every Critical and High finding, plus a list of the changes you made.
 6. **Recommended config files**: security headers / CSP, rate limiter, CORS, hardened Dockerfile, `.env.example`.

@@ -18,13 +18,11 @@ Those are the **"must do when built"** list at the end. Treat it as a requiremen
 
 ## 1. Executive summary: top 5 risks
 
-| # | Risk | Status |
-|---|---|---|
-| 1 | **Jira JQL injection.** A source id like `PAY" OR project = "HR` pulled other projects' tickets and tagged them as `PAY`, so people who can see PAY would see HR data. | **Fixed** |
-| 2 | **GitHub path traversal.** A source id like `../user` hit `/user/issues`, which returns issues from every repo the token can see, under a harmless-looking tag. | **Fixed** |
-| 3 | **API has no authentication** and compose published it on every network interface. | **Mitigated:** bound to `127.0.0.1`. Real auth is Phase 9. |
-| 4 | **Supply chain.** Model weights weren't pinned, so whatever was pushed to the repo got downloaded. Python deps have no lock file. | **Models pinned.** Lock file is still open. |
-| 5 | **No security headers, a public Swagger page in production, and the server version leaked.** | **Fixed** |
+1. **Jira JQL injection.** A source id like `PAY" OR project = "HR` pulled other projects' tickets and tagged them as `PAY`, so people who can see PAY would see HR data. **Status: fixed.**
+2. **GitHub path traversal.** A source id like `../user` hit `/user/issues`, which returns issues from every repo the token can see, under a harmless-looking tag. **Status: fixed.**
+3. **API has no authentication**, and compose published it on every network interface. **Status: mitigated.** It is bound to `127.0.0.1`; real auth is Phase 9.
+4. **Supply chain.** Model weights weren't pinned, so whatever was pushed to the repo got downloaded, and Python deps have no lock file. **Status: models pinned;** the lock file is still open.
+5. **No security headers, a public Swagger page in production, and the server version leaked.** **Status: fixed.**
 
 There are **no real secrets** in the code or anywhere in the git history (details in §3).
 
@@ -34,129 +32,143 @@ There are **no real secrets** in the code or anywhere in the git history (detail
 
 Status: ✅ PASS · ❌ FAIL → 🔧 fixed · ⚠️ open · ➖ N/A
 
-| ID | Area | Vulnerability | Severity | File:Line | Status | Fix |
-|---|---|---|---|---|---|---|
-| S-01 | Backend | JQL injection through `sources.external_id` | **High** | `app/learning/connectors/jira.py:126` | 🔧 | Ids validated in `build_connector` (`app/learning/connectors/__init__.py:15`) |
-| S-02 | Backend | Path traversal in GitHub API paths through `external_id` | **High** | `app/learning/connectors/github.py:108` | 🔧 | Same allowlist regex |
-| S-03 | Backend | Slack id not validated (could name a DM channel) | Low | `app/learning/connectors/slack.py:100` | 🔧 | Only `C…` / `G…` channel ids |
-| S-04 | Backend | GitHub paging followed any `Link: next` URL, sending the token there | Medium | `app/learning/connectors/github.py:90` | 🔧 | Refuses to leave the API host |
-| S-05 | Infra | API port published on `0.0.0.0` with no auth | **High** | `docker-compose.yml` `api.ports` | 🔧 | `127.0.0.1:` + TLS reverse proxy |
-| S-06 | Backend | No security headers / CSP | Medium | `app/api/main.py` | 🔧 | Middleware on every response |
-| S-07 | Backend | Swagger / OpenAPI public in production | Medium | `app/api/main.py` | 🔧 | `API_DOCS` setting, default **off**; compose forces it off |
-| S-08 | Backend | No generic 500 / correlation id | Low | `app/api/main.py` | 🔧 | `{"detail","request_id"}` + `X-Request-ID`; details only in the server log |
-| S-09 | Infra | `server: uvicorn` header leaks the server software | Low | `Dockerfile` CMD, compose `api.command` | 🔧 | `--no-server-header` |
-| S-10 | Infra | Model weights not pinned | Medium | `config/models.yaml` | 🔧 | Exact commit hash per HF model (gated Prompt Guard pinned once downloaded) |
-| S-11 | Infra | No Python lock file: image builds resolve the latest deps | Medium | `Dockerfile:21`, `pyproject.toml` | ⚠️ | §8 "fix this sprint" |
-| S-12 | Infra | Containers could gain privileges (setuid) | Low | `docker-compose.yml` | 🔧 | `no-new-privileges:true` on api + worker |
-| S-13 | Infra | Build context included `.git` | Low | `.dockerignore` | 🔧 | `.git` excluded |
-| S-14 | Backend | `CREATE DATABASE` built with an f-string | Low | `scripts/init_local_db.py:24` | 🔧 | `psycopg.sql.Identifier` |
-| S-15 | Data | `.env.example` missed `SLACK_API_URL`; no TLS note for remote DBs | Low | `.env.example` | 🔧 | Added both |
-| S-16 | Infra | `ollama` container runs as root (upstream image) | Low | `docker-compose.yml` `ollama` | ⚠️ | Not published on any port; accept or run rootless later |
-| S-17 | Infra | `pgvector/pgvector:pg17` tag not pinned to a digest | Low | `docker-compose.yml` | ⚠️ | Pin `@sha256:` on the deploy host |
-| S-18 | Backend | Outbound retries have no backoff or jitter; 5xx not retried | Low | `gateway.py:93`, connectors `_get` | ⚠️ | Fix later |
-| S-19 | Data | Old local-dev DB password `syncra` in git history | Low | commits before `c858982` | ⚠️ | Never use it anywhere (README warning added) |
+**S-01 · Backend · High · 🔧 fixed.** JQL injection through `sources.external_id`, at `app/learning/connectors/jira.py:126`. Fix: ids are validated in `build_connector` (`app/learning/connectors/__init__.py:15`).
+
+**S-02 · Backend · High · 🔧 fixed.** Path traversal in GitHub API paths through `external_id`, at `app/learning/connectors/github.py:108`. Fix: the same allowlist regex.
+
+**S-03 · Backend · Low · 🔧 fixed.** The Slack id wasn't validated, so it could name a DM channel (`app/learning/connectors/slack.py:100`). Fix: only `C…` / `G…` channel ids are accepted.
+
+**S-04 · Backend · Medium · 🔧 fixed.** GitHub paging followed any `Link: next` URL, sending the token there (`app/learning/connectors/github.py:90`). Fix: paging refuses to leave the API host.
+
+**S-05 · Infra · High · 🔧 fixed.** The API port was published on `0.0.0.0` with no auth (`docker-compose.yml`, `api.ports`). Fix: `127.0.0.1:` plus a TLS reverse proxy.
+
+**S-06 · Backend · Medium · 🔧 fixed.** No security headers or CSP (`app/api/main.py`). Fix: middleware on every response.
+
+**S-07 · Backend · Medium · 🔧 fixed.** Swagger / OpenAPI was public in production (`app/api/main.py`). Fix: the `API_DOCS` setting, default **off**; compose forces it off.
+
+**S-08 · Backend · Low · 🔧 fixed.** No generic 500 and no correlation id (`app/api/main.py`). Fix: `{"detail","request_id"}` plus `X-Request-ID`; details only go to the server log.
+
+**S-09 · Infra · Low · 🔧 fixed.** The `server: uvicorn` header leaked the server software (`Dockerfile` CMD, compose `api.command`). Fix: `--no-server-header`.
+
+**S-10 · Infra · Medium · 🔧 fixed.** Model weights weren't pinned (`config/models.yaml`). Fix: an exact commit hash per HF model (the gated Prompt Guard is pinned once downloaded).
+
+**S-11 · Infra · Medium · ⚠️ open.** No Python lock file, so image builds resolve the latest deps (`Dockerfile:21`, `pyproject.toml`). Fix: §8 "fix this sprint".
+
+**S-12 · Infra · Low · 🔧 fixed.** Containers could gain privileges through setuid (`docker-compose.yml`). Fix: `no-new-privileges:true` on api and worker.
+
+**S-13 · Infra · Low · 🔧 fixed.** The build context included `.git` (`.dockerignore`). Fix: `.git` excluded.
+
+**S-14 · Backend · Low · 🔧 fixed.** `CREATE DATABASE` was built with an f-string (`scripts/init_local_db.py:24`). Fix: `psycopg.sql.Identifier`.
+
+**S-15 · Data · Low · 🔧 fixed.** `.env.example` missed `SLACK_API_URL` and had no TLS note for remote DBs (`.env.example`). Fix: added both.
+
+**S-16 · Infra · Low · ⚠️ open.** The `ollama` container runs as root, as the upstream image does (`docker-compose.yml`, `ollama`). It isn't published on any port: accept it, or run it rootless later.
+
+**S-17 · Infra · Low · ⚠️ open.** The `pgvector/pgvector:pg17` tag isn't pinned to a digest (`docker-compose.yml`). Fix: pin `@sha256:` on the deploy host.
+
+**S-18 · Backend · Low · ⚠️ open.** Outbound retries have no backoff or jitter, and 5xx errors aren't retried (`gateway.py:93`, the connectors' `_get`). Fix later.
+
+**S-19 · Data · Low · ⚠️ open.** The old local-dev DB password `syncra` is in git history (commits before `c858982`). Never use it anywhere (README warning added).
 
 ### Full checklist (every item)
 
 **§1 Secrets**
-| Item | Status | Notes |
-|---|---|---|
-| No secret literals in source / config / comments | ✅ | Only fake test values in `tests/test_scrub.py` (they must look real to test the scrubber; the Slack one is split so scanners don't fire) |
-| Supabase / Stripe / Razorpay keys | ➖ | Not used |
-| DB connection string only in env | ✅ | `DATABASE_URL`; compose builds it from `POSTGRES_PASSWORD`, which is required (`:?`) |
-| OAuth / JWT secrets | ➖ | No auth yet (Phase 9) |
-| Third-party keys (GitHub, Jira, Slack, HF) in env | ✅ | `settings.py`, all optional and `None` by default |
-| `NEXT_PUBLIC_` / `REACT_APP_` / `VITE_` exposure | ➖ | No frontend |
-| `.env` git-ignored, `.env.example` complete | 🔧 | Ignored at the root and in `.dockerignore`; `.env.example` completed |
-| No secrets in Docker images or logs | ✅ | `.env` not copied (dockerignore); compose uses `env_file` at runtime. Logs print counts, cursors and model names only |
-| Git history scan | ✅ | Regex scan for Slack/GitHub/AWS/OpenAI/HF/Atlassian tokens, private keys and URLs with passwords across all commits: only fakes and the old local dev password (S-19). `gitleaks` isn't installed; GitHub push protection is on for the repo and already caught the fake Slack token |
 
-**§2 Personal data**: see the map in §4.
-| Item | Status | Notes |
-|---|---|---|
-| Collection points mapped | ✅ | §4 |
-| Logs free of personal data | ✅ | `sync.py:103` logs kind/name/counts/cursor; connector logs name repo/project/channel only; `last_error` holds the exception text (URLs, not tokens) |
-| Third parties get only what they need | ✅ | GitHub/Jira/Slack receive only API reads; Ollama and HF run locally; nothing is sent to hosted LLMs |
-| Password hashing | ➖ | No passwords stored (Phase 9: argon2/bcrypt) |
-| Cookies / localStorage | ➖ | No frontend |
-| Response filtering | ✅ | Only `/health` |
-| Data deletion | ➖ / ⚠️ | No user accounts yet. Deleting a `sources` row cascades to its items, chunks, decisions and graph links (links since migration 0002). Phase 9 must add per-user deletion (FKs already `ON DELETE CASCADE` on `users`), including the person entities whose aliases are that user's accounts |
+- ✅ **No secret literals in source / config / comments.** Only fake test values in `tests/test_scrub.py`. They must look real to test the scrubber, and the Slack one is split so scanners don't fire.
+- ➖ **Supabase / Stripe / Razorpay keys.** Not used.
+- ✅ **DB connection string only in env.** `DATABASE_URL`; compose builds it from `POSTGRES_PASSWORD`, which is required (`:?`).
+- ➖ **OAuth / JWT secrets.** No auth yet (Phase 9).
+- ✅ **Third-party keys (GitHub, Jira, Slack, HF) in env.** In `settings.py`, all optional and `None` by default.
+- ➖ **`NEXT_PUBLIC_` / `REACT_APP_` / `VITE_` exposure.** No frontend.
+- 🔧 **`.env` git-ignored, `.env.example` complete.** Ignored at the root and in `.dockerignore`; `.env.example` completed.
+- ✅ **No secrets in Docker images or logs.** `.env` isn't copied (dockerignore), and compose uses `env_file` at runtime. Logs print counts, cursors and model names only.
+- ✅ **Git history scan.** A regex scan of all commits for Slack/GitHub/AWS/OpenAI/HF/Atlassian tokens, private keys and URLs with passwords found only fakes and the old local dev password (S-19). `gitleaks` isn't installed; GitHub push protection is on for the repo and already caught the fake Slack token.
+
+**§2 Personal data** (see the map in §4)
+
+- ✅ **Collection points mapped.** See §4.
+- ✅ **Logs free of personal data.** `sync.py:103` logs kind, name, counts and cursor; connector logs name only the repo, project or channel; `last_error` holds the exception text (URLs, not tokens).
+- ✅ **Third parties get only what they need.** GitHub, Jira and Slack receive only API reads; Ollama and HF run locally; nothing is sent to hosted LLMs.
+- ➖ **Password hashing.** No passwords are stored (Phase 9: argon2/bcrypt).
+- ➖ **Cookies / localStorage.** No frontend.
+- ✅ **Response filtering.** Only `/health`.
+- ➖ / ⚠️ **Data deletion.** No user accounts yet. Deleting a `sources` row cascades to its items, chunks, decisions and graph links (links since migration 0002). Phase 9 must add per-user deletion (FKs are already `ON DELETE CASCADE` on `users`), including the person entities whose aliases are that user's accounts.
 
 **§3 Frontend:** every item is ➖ **N/A (no frontend until Phase 9)**. XSS, CSRF, CORS, CSP, clickjacking, open redirects, token storage, OAuth/PKCE, HTTPS/mixed content, WebSocket/SSE auth, UI rate limiting, `npm audit`/SRI and error display are all in the "must do when built" list.
 
 **§4 Backend**
-| Item | Status | Notes |
-|---|---|---|
-| SQL injection | ✅ | ORM / `insert().values()` everywhere; only raw SQL is `CREATE DATABASE` (S-14, fixed) and the test-only `TRUNCATE` from metadata names |
-| SSRF | ✅ | Outbound hosts come only from operator env (`GITHUB_API_URL`, `JIRA_BASE_URL`, `SLACK_API_URL`), not from users; paging host pinned (S-04) |
-| Input validation | 🔧 | Source ids (S-01..03); connector payloads parsed with pydantic `RawItem`; `yaml.safe_load`; no `pickle`/`eval`/`subprocess` with input (`pull_ollama_models.py` passes names from our own yaml as an argv list) |
-| File uploads | ➖ | None |
-| Webhooks | ➖ | None (polling) |
-| Auth on every endpoint / IDOR / RBAC / JWT / passwords / reset tokens / default admins | ➖ | No auth yet; `/health` is intentionally public. **Phase 9 blocker:** don't expose the API publicly before this exists |
-| Rate limiting | ➖ | No auth / chat endpoints yet. Phase 9 (§7 config) |
-| Request size / timeouts / pagination caps | ✅ / ⚠️ | Outbound timeouts 30 s (connectors), 120 s (Ollama); body size limit belongs to the reverse proxy (§7) |
-| Backpressure / queues | ✅ | No queue; scheduler `max_instances=1`, `coalesce=True` (`jobs/scheduler.py:37`) |
-| Retries / backoff / circuit breaker | ⚠️ | Rate-limit waits honoured; no jitter (S-18) |
-| Business logic / payments | ➖ | No payments |
-| Race conditions | ✅ | Upsert with `ON CONFLICT … WHERE hash differs` + cursor in one transaction (`sync.py:68`) |
-| Idempotency | ✅ | Re-running a sync stores nothing new (content hash) |
-| Sagas / pub-sub / DLQ | ➖ | None |
-| Cron jobs: no overlap, credentials secure | ✅ | `max_instances=1`; tokens from env |
-| Fail fast on missing config | ✅ | `ConfigError` names each missing field (`settings.py:95`); connectors raise if their token is missing |
-| Generic errors + correlation id | 🔧 | S-08 |
-| Debug code / test endpoints / debug default off | ✅ | No debug endpoints; `--reload` only in `make run` (local); docs off by default (S-07) |
-| Security headers | 🔧 | S-06 |
-| CORS | ✅ | Not enabled, so browsers block cross-origin calls. Phase 9: explicit frontend origin only |
-| Internal exposure (`.env`, `.git`, DB admin, Swagger, health) | 🔧 | API serves no files; Swagger off in prod; `/health` returns only `{"status":"ok"}`; DB bound to `127.0.0.1` |
-| TLS in transit / HSTS / at rest | ⚠️ | HSTS header added; TLS termination and disk encryption are on the host (§9 "what I need") |
-| DB: TLS, no default creds, least privilege, not public | ✅ / ⚠️ | Password required; port `127.0.0.1` only; same Docker network (TLS not needed). **The app connects as the Postgres superuser.** Create a restricted app role (§8) |
-| Migrations safe | ✅ | One initial migration; downgrade drops everything, so never run it in production |
-| API versioning | ➖ | One version |
+
+- ✅ **SQL injection.** ORM / `insert().values()` everywhere. The only raw SQL is `CREATE DATABASE` (S-14, fixed) and the test-only `TRUNCATE` built from metadata names.
+- ✅ **SSRF.** Outbound hosts come only from operator env (`GITHUB_API_URL`, `JIRA_BASE_URL`, `SLACK_API_URL`), not from users, and the paging host is pinned (S-04).
+- 🔧 **Input validation.** Source ids (S-01..03); connector payloads parsed with pydantic `RawItem`; `yaml.safe_load`; no `pickle`/`eval`/`subprocess` with input (`pull_ollama_models.py` passes names from our own yaml as an argv list).
+- ➖ **File uploads.** None.
+- ➖ **Webhooks.** None (polling).
+- ➖ **Auth on every endpoint / IDOR / RBAC / JWT / passwords / reset tokens / default admins.** No auth yet; `/health` is intentionally public. **Phase 9 blocker:** don't expose the API publicly before this exists.
+- ➖ **Rate limiting.** No auth or chat endpoints yet. Phase 9 (§7 config).
+- ✅ / ⚠️ **Request size / timeouts / pagination caps.** Outbound timeouts are 30 s (connectors) and 120 s (Ollama); the body size limit belongs to the reverse proxy (§7).
+- ✅ **Backpressure / queues.** No queue; the scheduler has `max_instances=1`, `coalesce=True` (`jobs/scheduler.py:37`).
+- ⚠️ **Retries / backoff / circuit breaker.** Rate-limit waits are honoured, but there's no jitter (S-18).
+- ➖ **Business logic / payments.** No payments.
+- ✅ **Race conditions.** Upsert with `ON CONFLICT … WHERE hash differs`, plus the cursor, in one transaction (`sync.py:68`).
+- ✅ **Idempotency.** Re-running a sync stores nothing new (content hash).
+- ➖ **Sagas / pub-sub / DLQ.** None.
+- ✅ **Cron jobs: no overlap, credentials secure.** `max_instances=1`; tokens from env.
+- ✅ **Fail fast on missing config.** `ConfigError` names each missing field (`settings.py:95`), and connectors raise if their token is missing.
+- 🔧 **Generic errors + correlation id.** S-08.
+- ✅ **Debug code / test endpoints / debug default off.** No debug endpoints; `--reload` only in `make run` (local); docs off by default (S-07).
+- 🔧 **Security headers.** S-06.
+- ✅ **CORS.** Not enabled, so browsers block cross-origin calls. Phase 9: explicit frontend origin only.
+- 🔧 **Internal exposure (`.env`, `.git`, DB admin, Swagger, health).** The API serves no files, Swagger is off in prod, `/health` returns only `{"status":"ok"}`, and the DB is bound to `127.0.0.1`.
+- ⚠️ **TLS in transit / HSTS / at rest.** HSTS header added; TLS termination and disk encryption are on the host (§9 "what I need").
+- ✅ / ⚠️ **DB: TLS, no default creds, least privilege, not public.** Password required, port on `127.0.0.1` only, same Docker network (TLS not needed). **The app connects as the Postgres superuser:** create a restricted app role (§8).
+- ✅ **Migrations safe.** One initial migration; downgrade drops everything, so never run it in production.
+- ➖ **API versioning.** One version.
 
 **§5 AI / LLM**
-| Item | Status | Notes |
-|---|---|---|
-| Prompt injection | ➖ | No LLM reads ingested text yet (Phase 3 decision reader, Phase 5 chat). Gateway already separates `system` from `prompt` (`gateway.py:71`) |
-| Permission filtering in retrieval | ✅ / ➖ | Every item **must** carry `access_tags` (fail-closed validator, `connectors/base.py:33`); the query-side filter is Phase 6 |
-| Scrub before store / embed / LLM | ✅ | `sync_source` scrubs every item before saving (`sync.py:101`) |
-| LLM actions need approval | ➖ | Phase 8 |
-| Model supply chain | 🔧 | HF revisions pinned (S-10); no `trust_remote_code`; local-only (no hosted APIs) |
+
+- ➖ **Prompt injection.** No LLM reads ingested text yet (Phase 3 decision reader, Phase 5 chat). The gateway already separates `system` from `prompt` (`gateway.py:71`).
+- ✅ / ➖ **Permission filtering in retrieval.** Every item **must** carry `access_tags` (fail-closed validator, `connectors/base.py:33`); the query-side filter is Phase 6.
+- ✅ **Scrub before store / embed / LLM.** `sync_source` scrubs every item before saving (`sync.py:101`).
+- ➖ **LLM actions need approval.** Phase 8.
+- 🔧 **Model supply chain.** HF revisions pinned (S-10); no `trust_remote_code`; local-only (no hosted APIs).
 
 **§6 Infra / CI/CD**
-| Item | Status | Notes |
-|---|---|---|
-| CI/CD | ➖ | No CI in repo. GitHub push protection is active |
-| Docker non-root / minimal / no baked secrets | ✅ | `python:3.12-slim`, multi-stage, `USER syncra` (uid 1000), `.env` excluded |
-| Read-only filesystem | ⚠️ | Not enabled: untested (no local Docker). Try `read_only: true` + `tmpfs: /tmp` on the host |
-| Kubernetes / Terraform / Helm | ➖ | Not used |
-| Reverse proxy / WAF / DDoS | ⚠️ | Not in repo. Config in §7 |
-| DNS / TLS certs | ⚠️ | Need the domain (§9) |
-| Feature flags | ➖ | None |
-| Rollback | ⚠️ | `alembic upgrade head` on api start; keep migrations backward compatible and back up before deploys |
-| Backups / DR | ⚠️ | Nothing in repo. §10 checklist |
-| Logs / alerting / incident response | ⚠️ | Logs go to stdout (docker). §10 |
-| Fail closed | ✅ | Missing config → no start; untagged item → rejected; failing source → skipped and recorded |
+
+- ➖ **CI/CD.** No CI in the repo. GitHub push protection is active.
+- ✅ **Docker non-root / minimal / no baked secrets.** `python:3.12-slim`, multi-stage, `USER syncra` (uid 1000), `.env` excluded.
+- ⚠️ **Read-only filesystem.** Not enabled, because it's untested (no local Docker). Try `read_only: true` + `tmpfs: /tmp` on the host.
+- ➖ **Kubernetes / Terraform / Helm.** Not used.
+- ⚠️ **Reverse proxy / WAF / DDoS.** Not in the repo. Config in §7.
+- ⚠️ **DNS / TLS certs.** Needs the domain (§9).
+- ➖ **Feature flags.** None.
+- ⚠️ **Rollback.** `alembic upgrade head` runs on api start; keep migrations backward compatible and back up before deploys.
+- ⚠️ **Backups / DR.** Nothing in the repo. §10 checklist.
+- ⚠️ **Logs / alerting / incident response.** Logs go to stdout (docker). §10.
+- ✅ **Fail closed.** Missing config → no start; untagged item → rejected; failing source → skipped and recorded.
 
 ---
 
 ## 3. Secrets found
 
-| What | Where | Moved to | Rotate? |
-|---|---|---|---|
-| Fake Slack/GitHub/AWS tokens, fake private key and password | `backend/tests/test_scrub.py` | Kept: test fixtures for the scrubber. Slack value split | No (not real) |
-| Local dev DB password `syncra` | Old commits (Task 0.2 Docker dev setup, removed in `c858982`) | Gone from the code; compose now **requires** `POSTGRES_PASSWORD` | Never reuse it |
-| Real tokens / passwords | Nowhere in code or history | `backend/.env` (git-ignored) | Rotate if a real one is ever committed |
+**Fake Slack/GitHub/AWS tokens, a fake private key and a fake password**, in `backend/tests/test_scrub.py`. Kept as test fixtures for the scrubber, with the Slack value split. Rotate? No, they're not real.
+
+**The local dev DB password `syncra`**, in old commits (the Task 0.2 Docker dev setup, removed in `c858982`). It's gone from the code, and compose now **requires** `POSTGRES_PASSWORD`. Rotate? Never reuse it.
+
+**Real tokens and passwords**: nowhere in the code or history. They live in `backend/.env` (git-ignored). Rotate one at once if it's ever committed.
 
 ## 4. Personal-data map
 
-| Data | Enters at | Stored in | Sent externally | Protection |
-|---|---|---|---|---|
-| Emails, phones, cards, IBAN, SSN, IPs in message text | GitHub/Jira/Slack connectors | `items.text/title` | Nowhere | Replaced with `<EMAIL_ADDRESS>` etc. **before** storage (`scrub.py`) |
-| Secrets pasted into messages (tokens, keys, connection strings, JWTs) | same | `items` | Nowhere | Same, replaced with `<SLACK_TOKEN>` etc. |
-| Person names (authors, assignee display names) | connectors | `items.author` (`github:login`, `jira:<accountId>`, `slack:<userId>`), Jira assignee name in `items.text` | Nowhere | Kept on purpose ("who built X" is the product). Covered by per-source deletion |
-| Links to source items | connectors | `items.link` | Nowhere | Point back to the original permission-controlled system |
-| Jira account email + API token, GitHub/Slack tokens | `.env` | Process memory only | Their own API, in auth headers | Never logged or stored in the DB |
-| Users, chat history, actions | (Phase 5–9) | `users`, `chat_*`, `actions` | Nowhere (local LLMs) | Cascade delete per user is ready in the schema |
+**Emails, phones, cards, IBANs, SSNs and IPs in message text** enter through the GitHub, Jira and Slack connectors and would be stored in `items.text` / `items.title`. They're sent nowhere, and they're replaced with `<EMAIL_ADDRESS>` etc. **before** storage (`scrub.py`).
+
+**Secrets pasted into messages** (tokens, keys, connection strings, JWTs) enter the same way and would be stored in `items`. They're sent nowhere, and they're replaced the same way, with `<SLACK_TOKEN>` etc.
+
+**Person names** (authors, assignee display names) come from the connectors. They're stored in `items.author` (`github:login`, `jira:<accountId>`, `slack:<userId>`), plus the Jira assignee name in `items.text`, and sent nowhere. They're kept on purpose ("who built X" is the product) and covered by per-source deletion.
+
+**Links to source items** come from the connectors and are stored in `items.link`, and are sent nowhere. They point back to the original, permission-controlled system.
+
+**The Jira account email and API token, and the GitHub and Slack tokens** come from `.env` and live in process memory only. They're sent only to their own API, in auth headers, and are never logged or stored in the DB.
+
+**Users, chat history and actions** (Phases 5–9) will be stored in `users`, `chat_*` and `actions`, and sent nowhere, because the LLMs are local. Cascade delete per user is ready in the schema.
 
 ---
 

@@ -10,6 +10,27 @@ Live record of what has been built. Agents add an entry here after every task (f
 
 ## Log
 
+### Docs pass (not a phase task)  ✅ done
+**Date:** 2026-10-16
+
+**Built**
+- `decision.md`: every choice made in Phases 0–4, what else was possible and why, plus the decisions still waiting for the user.
+- `flow.md`: how data moves through the system end to end: the learning run step by step, what each table holds, a worked example, what happens on later changes, and the planned chat side.
+- Every markdown table turned into short paragraphs or lists (`guide.md`, `agent.md`, `description.md`, `phases.md`, `security-audit.md`); content unchanged. `security.md` now asks auditors for lists instead of tables. `README.md`, `guide.md` and `agent.md` link the two new files.
+
+**Key files**
+- `decision.md`, `flow.md`, `agent.md`
+
+**Decisions**
+- No markdown tables in the docs (user preference): short paragraphs of 2–3 lines, or simple lists.
+- Keep `flow.md` and `decision.md` current: a task that changes how data moves updates `flow.md`, and each real choice between alternatives is added to `decision.md` as well as to the log (`agent.md` §4 step 7).
+
+**How to run / test**
+- Docs only; no code changed.
+
+**Known issues / TODO**
+- `security-audit.md` is a snapshot from 2026-10-15. A few lines predate Phases 3–4 (e.g. "no LLM reads ingested text yet", "one initial migration"); the next audit run refreshes them.
+
 ### Task 4.4 — Learning pipeline orchestration  ✅ done
 **Date:** 2026-10-16
 

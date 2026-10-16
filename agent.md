@@ -6,14 +6,14 @@ You are a coding agent (e.g. Claude Code) joining the **Syncra** project. This f
 
 ## 1. Read these first, in this order
 
-| File | Why |
-|---|---|
-| `agent.md` | This file — how to work |
-| `progress.md` | **What is already done**, what's next, open problems |
-| `description.md` | **What Syncra is** — architecture, pipelines, models, rules |
-| `phases.md` | **The task list** — every task with Build / Done when / Depends on |
+1. `agent.md`: this file, how to work.
+2. `progress.md`: **what is already done**, what's next and the open problems.
+3. `description.md`: **what Syncra is**, its architecture, pipelines, models and rules.
+4. `phases.md`: **the task list**, every task with Build / Done when / Depends on.
 
 Never start coding before reading `progress.md`. Earlier agents may have made choices (frameworks, folder layout, naming) you must follow.
+
+For background written for humans: `flow.md` follows the data through the system end to end, and `decision.md` explains each choice made so far and what else was possible.
 
 ---
 
@@ -48,6 +48,7 @@ Syncra is a team-memory chatbot. A **learning pipeline** (offline, every 15 min)
    - Add a log entry to `progress.md` (format below) and update its **Current status**.
    - Tick the task in the **Progress checklist** at the bottom of `phases.md`.
    - Update `README.md` if setup or run commands changed.
+   - Update `flow.md` if the task changes how data moves through the system, and add each real choice between alternatives to `decision.md`.
    - Update section 3 of this file if the repo state changed in a big way.
 8. **Commit** with message `Task <ID>: <title>`.
 
@@ -92,6 +93,7 @@ Then update **Current status** (current phase, next task, completed task list).
 - **Answers must cite evidence** (`[E1]…[E8]`). Actions need user approval.
 - **Tests use fakes.** Mock GitHub, Jira, Slack and Ollama in tests. Never commit real tokens or `.env`.
 - **Keep it simple.** Smallest working solution for the task; no speculative abstractions.
+- **No tables in the docs.** The user finds markdown tables hard to read: write short paragraphs (2–3 lines each) or simple lists instead.
 
 ---
 

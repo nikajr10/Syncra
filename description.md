@@ -26,14 +26,17 @@ Every answer shows **where it came from**, **how confident** Syncra is, and **su
 
 ## 3. Core principles
 
-| Principle | What it means |
-|---|---|
-| **Local-first** | All LLMs run on **Ollama**; all small models run via **Hugging Face** (`sentence-transformers`). Company data never leaves the machine. |
-| **One database** | Everything — graph, vectors, keyword index, decisions, chat history — lives in **PostgreSQL** (with **pgvector**). No separate vector DB, search engine or graph DB. |
-| **Small models first, LLM last** | Fast, cheap models (SetFit, GLiNER, SBERT, cross-encoder, DeBERTa) do most of the work. The LLM is used only where reasoning is needed: reading decisions, rewriting follow-ups, writing answers. |
-| **Privacy by default** | Personal data and secrets are hidden **before** anything is stored. Search only covers what the asking user is allowed to see. |
-| **Grounded answers** | Answers are written only from retrieved evidence, cite it (`[E1]`, `[E2]` …), and claims the evidence doesn't support are removed. |
-| **Safe actions** | If a user asks Syncra to *do* something, it shows an **approval card** first. Nothing runs without the user's approval. |
+**Local-first.** All LLMs run on **Ollama**, and all small models run via **Hugging Face** (`sentence-transformers`). Company data never leaves the machine.
+
+**One database.** Everything (graph, vectors, keyword index, decisions, chat history) lives in **PostgreSQL** with **pgvector**. There is no separate vector DB, search engine or graph DB.
+
+**Small models first, LLM last.** Fast, cheap models (SetFit, GLiNER, SBERT, cross-encoder, DeBERTa) do most of the work. The LLM is used only where reasoning is needed: reading decisions, rewriting follow-ups and writing answers.
+
+**Privacy by default.** Personal data and secrets are hidden **before** anything is stored. Search only covers what the asking user is allowed to see.
+
+**Grounded answers.** Answers are written only from retrieved evidence and cite it (`[E1]`, `[E2]` …). Claims the evidence doesn't support are removed.
+
+**Safe actions.** If a user asks Syncra to *do* something, it shows an **approval card** first. Nothing runs without the user's approval.
 
 ---
 
@@ -49,11 +52,11 @@ flowchart LR
     CP <--> KS
 ```
 
-| Part | When it runs | Job |
-|---|---|---|
-| **Learning pipeline** | Offline, in the background, every 15 minutes | Turn raw GitHub / Jira / Slack data into structured, searchable knowledge |
-| **Knowledge store** | Always on (PostgreSQL) | Holds the knowledge graph, vector index, keyword index, decisions and chat history |
-| **Chatbot pipeline** | Online, once per chat message | Turn a user's question into a checked, cited answer |
+**Learning pipeline.** Runs offline, in the background, every 15 minutes. It turns raw GitHub / Jira / Slack data into structured, searchable knowledge.
+
+**Knowledge store.** Always on (PostgreSQL). It holds the knowledge graph, vector index, keyword index, decisions and chat history.
+
+**Chatbot pipeline.** Runs online, once per chat message. It turns a user's question into a checked, cited answer.
 
 **Diagram colour legend:** 🟪 Purple = LLM (Qwen3 via Ollama) · 🟩 Teal = small AI models, tools and search
 
@@ -97,29 +100,25 @@ flowchart TD
 
 ### Stage 1 — Collect and clean
 
-| Component | Use | What it must do |
-|---|---|---|
-| **Connectors** | GitHub, Jira and Slack APIs | Every 15 minutes, pull only **new or changed** items (PRs, commits, reviews, issues, comments, Slack messages and threads). Keep each item's link, author, time and access permissions. |
-| **Privacy scrubber** | **Microsoft Presidio** | Find and hide personal data (emails, phone numbers, etc.) and secrets (API keys, tokens, passwords) **before** anything is stored. |
+**Connectors** (GitHub, Jira and Slack APIs). Every 15 minutes, pull only **new or changed** items: PRs, commits, reviews, issues, comments, Slack messages and threads. Keep each item's link, author, time and access permissions.
+
+**Privacy scrubber** (**Microsoft Presidio**). Find and hide personal data (emails, phone numbers, etc.) and secrets (API keys, tokens, passwords) **before** anything is stored.
 
 **Output →** clean items.
 
 ### Stage 2 — Sort and split
 
-| Component | Use | What it must do |
-|---|---|---|
-| **Triage** | **SetFit** classifier | Keep useful items, drop noise: bot messages, "thanks!", emoji-only replies, CI chatter. |
-| **Chunker** | Text splitter | Cut long text into small, slightly overlapping pieces that fit the embedder and the LLM. Each chunk remembers its source item. |
+**Triage** (**SetFit** classifier). Keep useful items and drop noise: bot messages, "thanks!", emoji-only replies, CI chatter.
+
+**Chunker** (text splitter). Cut long text into small, slightly overlapping pieces that fit the embedder and the LLM. Each chunk remembers its source item.
 
 **Output →** useful chunks.
 
 ### Stage 3 — Understand (3 helpers, in order)
 
-| # | Helper | Use | Input → Output |
-|---|---|---|---|
-| 1 | **Entity finder** | **GLiNER** | chunk → names + types (`person`, `service`, `tool`, `project`) |
-| 2 | **Decision reader** 🟪 | **Qwen3 via Ollama** | thread / PR + entities → what was decided, why, by whom |
-| 3 | **Embedder** | **Qwen3-Embedding** via Hugging Face `sentence-transformers` | chunk → one **1024-dimension** vector |
+1. **Entity finder** (**GLiNER**): chunk → names + types (`person`, `service`, `tool`, `project`).
+2. **Decision reader** 🟪 (**Qwen3 via Ollama**): thread / PR + entities → what was decided, why, by whom.
+3. **Embedder** (**Qwen3-Embedding** via Hugging Face `sentence-transformers`): chunk → one **1024-dimension** vector.
 
 The decision reader must return strict JSON:
 
@@ -137,12 +136,13 @@ Output that isn't valid JSON is retried or dropped — never stored half-parsed.
 
 ### Stage 4 — Link and store (PostgreSQL + pgvector)
 
-| Component | Use | What it must do |
-|---|---|---|
-| **Entity linking** | **SBERT** similarity | Merge the same thing written different ways (`payments-svc`, `payment service`, `PaymentService` → one entity). |
-| **Knowledge graph** | PostgreSQL tables | Store people, services, tools, projects, decisions and the links between them (authored, reviewed, decided, mentions, owns, depends on). |
-| **Vector index** | **pgvector** with **HNSW** index | Fast meaning-based search over chunk vectors. |
-| **Keyword index** | PostgreSQL **full-text search** | Exact-term search: ticket IDs, function names, error codes. |
+**Entity linking** (**SBERT** similarity). Merge the same thing written different ways (`payments-svc`, `payment service`, `PaymentService` → one entity).
+
+**Knowledge graph** (PostgreSQL tables). Store people, services, tools, projects, decisions and the links between them (authored, reviewed, decided, mentions, owns, depends on).
+
+**Vector index** (**pgvector** with an **HNSW** index). Fast meaning-based search over chunk vectors.
+
+**Keyword index** (PostgreSQL **full-text search**). Exact-term search: ticket IDs, function names, error codes.
 
 **Output →** knowledge store ready for chat.
 
@@ -188,41 +188,33 @@ flowchart TD
 
 ### Stage 1 — Understand the chat
 
-| Component | Use | What it must do |
-|---|---|---|
-| **Chat memory** | PostgreSQL | Load the last **10 turns** of the conversation. |
-| **Question rewriter** 🟪 | **Qwen3 4B via Ollama** | Turn a follow-up into a standalone question. `"who built it?"` → `"who built the payment service?"` |
+**Chat memory** (PostgreSQL). Load the last **10 turns** of the conversation.
+
+**Question rewriter** 🟪 (**Qwen3 4B via Ollama**). Turn a follow-up into a standalone question: `"who built it?"` → `"who built the payment service?"`.
 
 ### Stage 2 — Safety and intent
 
-| Component | Use | What it must do |
-|---|---|---|
-| **Prompt guard** | **Meta Prompt Guard 2** | Detect and block prompt-injection / jailbreak attempts. |
-| **Intent router** | **SetFit** classifier | Decide which path the message takes. |
+**Prompt guard** (**Meta Prompt Guard 2**). Detect and block prompt-injection / jailbreak attempts.
 
-| Intent | Path |
-|---|---|
-| **Small talk** ("hi", "thanks") | Instant reply — no search, no LLM. |
-| **Question** | Full pipeline (Stages 3 → 5). |
-| **Action** ("create a Jira ticket for this") | Show an **approval card**. Runs only after the user approves. |
+**Intent router** (**SetFit** classifier). Decide which path the message takes:
+
+- **Small talk** ("hi", "thanks"): an instant reply, with no search and no LLM.
+- **Question**: the full pipeline (Stages 3 → 5).
+- **Action** ("create a Jira ticket for this"): show an **approval card**. It runs only after the user approves.
 
 ### Stage 3 — Find evidence (hybrid search)
 
 Three searches run **in parallel**, and each **only searches what this user is allowed to see** (permissions are applied inside the search, not afterwards).
 
-| Search | Use | Good at |
-|---|---|---|
-| **Vector search** | SBERT question vector → pgvector | Meaning ("why is checkout slow?") |
-| **Keyword search** | PostgreSQL full-text index | Exact terms (`PAY-1234`, `retry_limit`) |
-| **Graph search** | Follow links in the knowledge graph | Relationships ("who reviewed X?", "what depends on Y?") |
+- **Vector search** (SBERT question vector → pgvector) is good at meaning: "why is checkout slow?"
+- **Keyword search** (PostgreSQL full-text index) is good at exact terms: `PAY-1234`, `retry_limit`.
+- **Graph search** (follows links in the knowledge graph) is good at relationships: "who reviewed X?", "what depends on Y?"
 
 All matches go to a **reranker** — a **cross-encoder** from Hugging Face `sentence-transformers` — which scores every match against the question and **keeps the best 8**.
 
 ### Stage 4 — Write the answer
 
-| Component | Use | What it must do |
-|---|---|---|
-| **Answer writer** 🟪 | **Qwen3 8B via Ollama** | Read the 8 evidence items + chat history and write the answer with inline citations `[E1]…[E8]`. **Streams word by word.** |
+**Answer writer** 🟪 (**Qwen3 8B via Ollama**). Read the 8 evidence items + chat history and write the answer with inline citations `[E1]…[E8]`. It **streams word by word.**
 
 Rules:
 - Answer **only** from the evidence. If the evidence isn't enough, say "I don't know" rather than guess.
@@ -230,10 +222,9 @@ Rules:
 
 ### Stage 5 — Check the answer
 
-| Component | Use | What it must do |
-|---|---|---|
-| **Claim checker** | **DeBERTa** NLI model | Check each claim against the evidence it cites. **Unsupported claims are removed.** |
-| **Confidence score** | Based on checker + reranker scores | Label the answer **high**, **medium** or **low**. |
+**Claim checker** (**DeBERTa** NLI model). Check each claim against the evidence it cites. **Unsupported claims are removed.**
+
+**Confidence score** (based on the checker and reranker scores). Label the answer **high**, **medium** or **low**.
 
 ### Chat reply
 
@@ -245,47 +236,54 @@ The user receives **answer · sources (clickable links) · confidence · suggest
 
 All in **PostgreSQL**.
 
-| Store | Contents | Used by |
-|---|---|---|
-| **Knowledge graph** | Entities (people, services, tools, projects, decisions) and the links between them | Graph search |
-| **Vector index** | One 1024-dim vector per chunk (pgvector, HNSW) | Vector search |
-| **Keyword index** | Full-text index over chunk text | Keyword search |
-| **Decisions** | `{decision, reason, people}` + source link and date | Graph search, answers |
-| **Chunks & sources** | Chunk text, source link, author, time, permissions | Evidence and citations |
-| **Chat history** | Every user message and reply, with sources and confidence | Chat memory (last 10 turns) |
+**Knowledge graph**: entities (people, services, tools, projects, decisions) and the links between them. Used by graph search.
+
+**Vector index**: one 1024-dim vector per chunk (pgvector, HNSW). Used by vector search.
+
+**Keyword index**: a full-text index over chunk text. Used by keyword search.
+
+**Decisions**: `{decision, reason, people}` plus the source link and date. Used by graph search and answers.
+
+**Chunks & sources**: chunk text, source link, author, time and permissions. Used for evidence and citations.
+
+**Chat history**: every user message and reply, with sources and confidence. Used by chat memory (last 10 turns).
 
 ---
 
 ## 8. Model & tool list
 
-| Job | Model / tool | Runs on | Pipeline |
-|---|---|---|---|
-| Hide personal data & secrets | **Presidio** | Python library | Learning |
-| Useful vs. noise | **SetFit** | Hugging Face | Learning |
-| Find entities | **GLiNER** | Hugging Face | Learning |
-| Read decisions 🟪 | **Qwen3** | Ollama | Learning |
-| Make vectors (1024-dim) | **Qwen3-Embedding** | sentence-transformers | Both |
-| Merge duplicate entities | **SBERT** | sentence-transformers | Learning |
-| Rewrite follow-ups 🟪 | **Qwen3 4B** | Ollama | Chatbot |
-| Block prompt attacks | **Prompt Guard 2** | Hugging Face | Chatbot |
-| Pick the path | **SetFit** | Hugging Face | Chatbot |
-| Rank evidence | **Cross-encoder** | sentence-transformers | Chatbot |
-| Write the answer 🟪 | **Qwen3 8B** | Ollama | Chatbot |
-| Check claims | **DeBERTa** (NLI) | Hugging Face | Chatbot |
-| Store everything | **PostgreSQL + pgvector** | Database | Both |
+**Learning pipeline**
+
+- Hide personal data & secrets: **Presidio** (Python library)
+- Useful vs. noise: **SetFit** (Hugging Face)
+- Find entities: **GLiNER** (Hugging Face)
+- Read decisions 🟪: **Qwen3** (Ollama)
+- Merge duplicate entities: **SBERT** (sentence-transformers)
+
+**Chatbot pipeline**
+
+- Rewrite follow-ups 🟪: **Qwen3 4B** (Ollama)
+- Block prompt attacks: **Prompt Guard 2** (Hugging Face)
+- Pick the path: **SetFit** (Hugging Face)
+- Rank evidence: **Cross-encoder** (sentence-transformers)
+- Write the answer 🟪: **Qwen3 8B** (Ollama)
+- Check claims: **DeBERTa** NLI (Hugging Face)
+
+**Both pipelines**
+
+- Make vectors (1024-dim): **Qwen3-Embedding** (sentence-transformers)
+- Store everything: **PostgreSQL + pgvector** (database)
 
 ---
 
 ## 9. Key numbers
 
-| Setting | Value |
-|---|---|
-| Sync interval | every **15 minutes** |
-| Embedding size | **1024** dimensions |
-| Vector index type | **HNSW** |
-| Chat memory | last **10 turns** |
-| Evidence passed to the answer writer | best **8** |
-| Confidence levels | **high / medium / low** |
+- Sync interval: every **15 minutes**
+- Embedding size: **1024** dimensions
+- Vector index type: **HNSW**
+- Chat memory: last **10 turns**
+- Evidence passed to the answer writer: best **8**
+- Confidence levels: **high / medium / low**
 
 ---
 

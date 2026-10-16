@@ -30,19 +30,19 @@ This file splits the whole Syncra build (see [`description.md`](description.md))
 
 ## Phase overview
 
-| Phase | Name | Result at the end |
-|---|---|---|
-| 0 | Foundation | Project runs locally: database, Ollama, config, model access, tests |
-| 1 | Collect and clean | GitHub, Jira, Slack data pulled every 15 min with private data hidden |
-| 2 | Sort and split | Noise dropped, useful text cut into chunks |
-| 3 | Understand | Entities, decisions and vectors produced for each chunk |
-| 4 | Link and store | Full learning pipeline fills the knowledge store automatically |
-| 5 | Chat basics | Chat API with memory, follow-up rewriting, safety and intent routing |
-| 6 | Find evidence | Hybrid search (vector + keyword + graph) with permissions and reranking |
-| 7 | Write and check answers | Streamed, cited, fact-checked answers with confidence |
-| 8 | Actions | Approval cards for "do something" requests (e.g. create a Jira ticket) |
-| 9 | Web app | Chat UI for users, plus source connection screens |
-| 10 | Quality and launch | Evaluation, permission tests, speed tuning, demo data, docs |
+What each phase leaves behind when it's done:
+
+- **Phase 0, Foundation**: the project runs locally, with the database, Ollama, config, model access and tests.
+- **Phase 1, Collect and clean**: GitHub, Jira and Slack data pulled every 15 min, with private data hidden.
+- **Phase 2, Sort and split**: noise dropped, and useful text cut into chunks.
+- **Phase 3, Understand**: entities, decisions and vectors produced for each chunk.
+- **Phase 4, Link and store**: the full learning pipeline fills the knowledge store automatically.
+- **Phase 5, Chat basics**: a chat API with memory, follow-up rewriting, safety and intent routing.
+- **Phase 6, Find evidence**: hybrid search (vector + keyword + graph) with permissions and reranking.
+- **Phase 7, Write and check answers**: streamed, cited, fact-checked answers with a confidence level.
+- **Phase 8, Actions**: approval cards for "do something" requests (e.g. create a Jira ticket).
+- **Phase 9, Web app**: a chat UI for users, plus screens to connect sources.
+- **Phase 10, Quality and launch**: evaluation, permission tests, speed tuning, demo data and docs.
 
 ```mermaid
 flowchart LR
