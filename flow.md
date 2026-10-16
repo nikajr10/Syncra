@@ -132,7 +132,7 @@ The run logs one line such as `learn: {'sources': 2, 'noise': 2, 'learned': 3, '
 
 **`users` and `user_source_identities`** hold the Syncra users and the GitHub, Jira and Slack accounts an admin linked to each. **`auth_tokens`** holds one row per login: the SHA-256 of the token and when it expires, never the token itself.
 
-**`chat_sessions`, `chat_messages` and `actions`** exist already but stay empty until later in Phase 5 and Phase 8: chat history and approval cards.
+**`chat_sessions` and `chat_messages`** hold each user's chats and every message in them, in the order they were sent. **`actions`** exists already but stays empty until Phase 8: approval cards.
 
 ---
 
@@ -189,7 +189,7 @@ The interactive docs at `/docs` are on locally (`API_DOCS=true` in `.env`) and a
 None of this is built yet. It's how the design in `description.md` will use what the worker stores, with the task that builds each step in brackets.
 
 1. **Who's asking** (built). The user logs in with a token, and the GitHub, Jira and Slack accounts an admin linked to them decide what they may see (5.1).
-2. **Memory.** The last 10 turns of the chat are loaded from `chat_messages` (5.2).
+2. **Memory** (built). The last 10 turns of the chat are loaded from `chat_messages`, oldest first. A turn is one user message and the replies after it (5.2).
 3. **Rewrite.** If there is history, qwen3:4b turns a follow-up like "who built it?" into a standalone question like "who built the payment service?" (5.3).
 4. **Safety.** Prompt Guard 2 blocks prompt-injection and jailbreak attempts with a polite reply (5.4).
 5. **Intent.** A second SetFit classifier picks the path. Small talk gets an instant reply with no search, a request to *do* something goes to an approval card, and a question carries on (5.5).
@@ -231,4 +231,5 @@ All paths are under `backend/`.
 - Every model call: `app/models/gateway.py`, with the models listed in `config/models.yaml`
 - Settings: `app/config/settings.py`, reading `.env`
 - Tables: `app/db/schema.py`, created by the files in `migrations/versions/`
-- The API: `app/api/main.py`; users, logins and linked accounts: `app/api/auth.py` (the admin commands are `scripts/users.py`)
+- The API: `app/api/main.py`; users, logins and linked accounts: `app/api/auth.py` (the admin commands are `scripts/users.py`); chats: `app/api/chat.py`
+- Chat memory: `app/chat/memory.py`

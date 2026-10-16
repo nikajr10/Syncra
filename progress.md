@@ -5,10 +5,41 @@ Live record of what has been built. Agents add an entry here after every task (f
 ## Current status
 
 - **Current phase:** Phase 5 — Chat basics (Phase 4 complete: the learning pipeline runs end to end)
-- **Next task:** 5.2 — Chat sessions and memory
-- **Completed tasks:** 0.1–0.6 (Phase 0 complete), 1.1–1.6 (Phase 1 complete), 2.1–2.3 (Phase 2 complete), 3.1–3.4 (Phase 3 complete), 4.1–4.4 (Phase 4 complete), 5.1
+- **Next task:** 5.3 — Question rewriter
+- **Completed tasks:** 0.1–0.6 (Phase 0 complete), 1.1–1.6 (Phase 1 complete), 2.1–2.3 (Phase 2 complete), 3.1–3.4 (Phase 3 complete), 4.1–4.4 (Phase 4 complete), 5.1–5.2
 
 ## Log
+
+### Task 5.2 — Chat sessions and memory  ✅ done
+**Date:** 2026-10-16
+
+**Built**
+- `app/api/chat.py` (router `/chat`, every endpoint behind the login):
+  - `POST /chat/sessions` `{title?}` → `{id, title, updated_at}` (201).
+  - `GET /chat/sessions` → the user's chats, most recently used first.
+  - `GET /chat/sessions/{id}/messages` → every message of one of the user's chats, oldest first (`role`, `content`, `sources`, `confidence`, `created_at`).
+  - `own_chat(session, user, chat_id)`: the chat if it is the user's, otherwise 404 `Chat not found` (someone else's chat looks like a missing one).
+- `app/chat/memory.py`:
+  - `add_message(session, chat, role, content)` saves a message and marks the chat as used; the caller commits.
+  - `last_turns(session, chat_id, turns=None)` → the messages of the last `CHAT_MEMORY_TURNS` (10) turns, oldest first. A turn is a user message and the replies after it; an unanswered question still counts as one.
+- `tests.fakes.login_as(session, username)` creates a user and returns headers with their token; `tests.fakes.api` is the shared TestClient.
+- Tests: each user sees only their own chats (list, order by last use, 404 for someone else's or a missing chat, title length); messages saved in one transaction come back in order; with 11 turns (one unanswered) the oldest turn is not loaded, a smaller `turns` works, and a newer message in another chat never leaks in. Checked that the test fails with an off-by-one offset or without either chat filter.
+
+**Key files**
+- `backend/app/api/chat.py`, `backend/app/chat/memory.py`, `backend/tests/test_memory.py`, `backend/tests/fakes.py`
+
+**Decisions**
+- Order messages by `id`, never `created_at`: messages saved in one transaction share `now()`.
+- Turns are counted by user messages, so a missing reply doesn't shift the window.
+- `add_message` only flushes: the chat endpoint (5.6) saves a whole turn in one transaction.
+- Chat history keeps text, never chunk ids (Task 4.3: chunk ids change when an item is re-learned). Phase 7 puts links and text in `chat_messages.sources`.
+
+**How to run / test**
+- `make test`
+
+**Known issues / TODO**
+- The chat list isn't paged, and chats can't be renamed or deleted yet (Phase 9 screens).
+- Messages are only saved through `add_message` until the chat endpoint arrives in Task 5.6.
 
 ### Task 5.1 — Users and login  ✅ done
 **Date:** 2026-10-16

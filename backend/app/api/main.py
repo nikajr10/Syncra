@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 
-from app.api import auth
+from app.api import auth, chat
 from app.config.settings import get_models_config, get_settings
 
 log = logging.getLogger("syncra.api")
@@ -68,3 +68,4 @@ def health() -> dict[str, str]:
 
 
 app.include_router(auth.router)
+app.include_router(chat.router)

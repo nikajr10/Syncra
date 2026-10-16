@@ -4,16 +4,16 @@ import hashlib
 import re
 
 import pytest
-from fastapi.testclient import TestClient
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.api.auth import add_user, hash_password, link_account, verify_password
 from app.api.main import app
 from app.db.schema import AuthToken, UserSourceIdentity
+from tests.fakes import api
 
 PUBLIC = {"/health", "/auth/login"}
-client = TestClient(app)
+client = api
 
 
 def _login(username: str = "alice", password: str = "correct horse") -> dict[str, str]:

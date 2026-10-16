@@ -374,7 +374,19 @@ Code-level details are in [`progress.md`](progress.md), and how the parts work t
 
 ---
 
-## 21. Chat-side models (picked, not built yet)
+## 21. The chat
+
+**A user only ever sees their own chats.** Every chat lookup includes the user, and someone else's chat answers "not found", exactly like a chat that doesn't exist, so chat ids can't be probed.
+
+**A turn is one user message and the replies after it**, and the chat remembers the last 10 (`CHAT_MEMORY_TURNS`). Counting messages instead would drift whenever a reply is missing, for example after an error, while a question without an answer still counts as a turn.
+
+**Messages are ordered by their id, not their time.** Two messages saved in one database transaction get the same timestamp, so time alone can't tell which came first.
+
+**The chat list shows the most recently used chat first.** Saving a message marks its chat as used.
+
+---
+
+## 22. Chat-side models (picked, not built yet)
 
 **These are configured but not built or tested yet.** Where your design names only a kind of model, the usual small version of it was picked, and Phases 5–7 will check them.
 

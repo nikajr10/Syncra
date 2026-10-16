@@ -472,7 +472,7 @@ flowchart LR
 
 **Phase 5 — Chat basics**
 - [x] 5.1 Users and login
-- [ ] 5.2 Chat sessions and memory
+- [x] 5.2 Chat sessions and memory
 - [ ] 5.3 Question rewriter
 - [ ] 5.4 Prompt guard
 - [ ] 5.5 Intent router (SetFit)

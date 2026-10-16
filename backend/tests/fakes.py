@@ -4,11 +4,23 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.auth import add_user
+from app.api.main import app
 from app.db.schema import Chunk, Decision, Edge, Entity, Item
 from app.learning.connectors.base import RawItem
+
+api = TestClient(app)
+
+
+def login_as(session: Session, username: str) -> dict[str, str]:
+    """Create the user and log in: the headers that carry their token."""
+    add_user(session, username, "correct horse")
+    response = api.post("/auth/login", json={"username": username, "password": "correct horse"})
+    return {"Authorization": f"Bearer {response.json()['token']}"}
 
 
 def item(n: int, text: str = "", **overrides: object) -> RawItem:
