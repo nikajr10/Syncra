@@ -227,6 +227,16 @@ make run        # API on http://127.0.0.1:8000
 Check it works — open http://127.0.0.1:8000/health (should show `{"status":"ok"}`)
 or http://127.0.0.1:8000/docs for the interactive API page. Stop with `Ctrl+C`.
 
+Everything else in the API needs a login. Create one for yourself (in a second terminal, inside `backend/`):
+
+```bash
+make add-user      # asks for a username, a display name and a password (8+ characters)
+```
+
+In http://127.0.0.1:8000/docs, open `POST /auth/login`, click **Try it out**, send your username and
+password, and copy the `token` from the answer. Click **Authorize** at the top of the page and paste it.
+Now `GET /me` shows who you are. A token works for 12 hours; then log in again.
+
 To sync and learn from GitHub/Jira/Slack in the background, run `make worker` in a second terminal (also inside `backend/`).
 It needs Ollama running and the noise filter trained (`make train-triage`, step 8).
 It needs the source credentials (step 10).
@@ -247,6 +257,10 @@ It needs the source credentials (step 10).
 3. `make worker` — new items show up in the `items` table (personal data and secrets are scrubbed first), then the
    worker learns from them: `chunks`, `entities`, `decisions` and `edges` fill up, and each item's `status` becomes
    `processed` or `noise`.
+4. Link each person's accounts to their Syncra user with `make link-account`. It asks for the username, the tool
+   (`github`, `jira` or `slack`) and the account id: the GitHub login, the Jira accountId, or the Slack member id
+   (`U0123…`, from their Slack profile → ⋮ → Copy member ID). Only whoever runs these commands (the admin) can link
+   accounts, because later they decide what each user may search.
 
 ---
 

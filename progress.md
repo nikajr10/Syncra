@@ -5,10 +5,44 @@ Live record of what has been built. Agents add an entry here after every task (f
 ## Current status
 
 - **Current phase:** Phase 5 — Chat basics (Phase 4 complete: the learning pipeline runs end to end)
-- **Next task:** 5.1 — Users and login
-- **Completed tasks:** 0.1–0.6 (Phase 0 complete), 1.1–1.6 (Phase 1 complete), 2.1–2.3 (Phase 2 complete), 3.1–3.4 (Phase 3 complete), 4.1–4.4 (Phase 4 complete)
+- **Next task:** 5.2 — Chat sessions and memory
+- **Completed tasks:** 0.1–0.6 (Phase 0 complete), 1.1–1.6 (Phase 1 complete), 2.1–2.3 (Phase 2 complete), 3.1–3.4 (Phase 3 complete), 4.1–4.4 (Phase 4 complete), 5.1
 
 ## Log
+
+### Task 5.1 — Users and login  ✅ done
+**Date:** 2026-10-16
+
+**Built**
+- `app/api/auth.py`:
+  - Passwords: `hash_password` / `verify_password` with the standard library's scrypt (n=2^14, r=8, p=5: OWASP's minimum, 16 MiB; about 0.16 s per check), stored as `scrypt$n$r$p$salt$hash`. A login for an unknown user still runs one scrypt, so the timing doesn't reveal usernames.
+  - `POST /auth/login` `{username, password}` → `{token, expires_at}`. The token is 32 random bytes (`secrets.token_urlsafe`); only its SHA-256 is stored, in the new `auth_tokens` table (migration 0003), and it expires after `TOKEN_TTL_HOURS` (12). Expired tokens are deleted at every login. Usernames are case-insensitive (stored lower-case).
+  - `current_user` (the `CurrentUser` annotation): `Authorization: Bearer <token>` → the `User`, otherwise 401 `Not authenticated` with `WWW-Authenticate: Bearer`.
+  - `POST /auth/logout` deletes the token; `GET /me` returns the username, display name and linked accounts.
+  - `add_user` / `link_account` for admins, run by `make add-user` / `make link-account` (`scripts/users.py`, interactive; the password is read with getpass, never passed as an argument). Account ids get a format check per tool, and an account linked to one user can't be linked to another.
+- Tests: salted scrypt hashes verify; login → /me → logout; a wrong password and an unknown user get the same answer; only the token's hash is stored; expired tokens stop working and are tidied up; every endpoint in the OpenAPI schema except `/health` and `/auth/login` answers 401 with no token, a made-up token and a non-Bearer header (so later endpoints are covered automatically); the input checks of `add_user` and `link_account`.
+- Smoke run (not in the suite) in a throwaway database: `make add-user`, `make link-account` (and a rejected `slack:U01`), login and `/me`. Dev database migrated to 0003.
+
+**Key files**
+- `backend/app/api/auth.py`, `backend/migrations/versions/0003_auth_tokens.py`, `backend/app/db/schema.py` (`AuthToken`), `backend/scripts/users.py`, `backend/tests/test_auth.py`
+
+**Decisions**
+- Local accounts with a password, as the task asks. Company sign-in is still the user's call for Phase 9; it would hand out the same tokens after its callback.
+- Opaque random tokens stored hashed in Postgres, not JWTs: logout and expiry are a row delete and a timestamp, with no signing secret to manage.
+- scrypt from the standard library instead of adding argon2-cffi or bcrypt: `security.md` accepts scrypt, and no dependency is added.
+- **Only admins link accounts (user decision, 2026-10-16).** From Phase 6 a user's linked accounts decide what they may search, so a self-claimed colleague's account would leak their channels. Users see their links in `/me`. Self-service linking with a real sign-in to each tool (OAuth) can come with the Phase 9 settings screen.
+- Admin work is a CLI for now, like connecting a source is a SQL row: there are no admin endpoints, and `users.is_admin` is unused.
+- Account ids are stored without the `kind:` prefix and exactly as the connectors write authors (`alice-gh`, a Jira accountId, `U0123ABC`), so `link_identities` (Task 4.1) finds their person entities.
+- New endpoints take `user: CurrentUser` and `session: DB` (both from `app/api/auth.py`) and must check that what they touch belongs to `user`.
+- FastAPI 0.143 keeps an included router as one `_IncludedRouter` entry in `app.routes`; list endpoints with `app.openapi()["paths"]` instead.
+
+**How to run / test**
+- `make migrate` (new migration 0003) · `make add-user` · `make link-account` · `make test` (106 pass)
+
+**Known issues / TODO**
+- No login rate limit or lockout in the app. `security-audit.md` §7 puts it on the reverse proxy (nginx `limit_req zone=login rate=5r/m`) for Phase 9; until then the API listens on 127.0.0.1 only, and each guess costs a 0.16 s scrypt.
+- No password change or reset, and deleting a user or unlinking an account is SQL only (deleting a user cascades to their tokens, accounts and chats).
+- `users.is_admin` isn't used yet: the admin is whoever can run the CLI on the server.
 
 ### Docs pass (not a phase task)  ✅ done
 **Date:** 2026-10-16

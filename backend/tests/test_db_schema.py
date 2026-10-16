@@ -12,6 +12,7 @@ from app.db.engine import get_engine
 from app.db.schema import (
     EMBEDDING_DIM,
     Action,
+    AuthToken,
     Base,
     ChatMessage,
     ChatSession,
@@ -49,6 +50,7 @@ def test_insert_and_read_one_row_in_every_table(db_session: Session) -> None:
     session.add(user)
     session.flush()
     session.add(UserSourceIdentity(user_id=user.id, source_kind="github", external_id="alice"))
+    session.add(AuthToken(user_id=user.id, token_hash="0" * 64, expires_at=now))
 
     source = Source(kind="github", name="acme/payments", external_id="acme/payments")
     session.add(source)

@@ -1,4 +1,5 @@
-.PHONY: install run worker test lint fmt pull-models download-models train-triage db-init migrate
+.PHONY: install run worker test lint fmt pull-models download-models train-triage db-init migrate \
+	add-user link-account
 
 PYTHON ?= python3.12
 
@@ -36,3 +37,9 @@ db-init:
 
 migrate:
 	.venv/bin/alembic upgrade head
+
+add-user:
+	.venv/bin/python scripts/users.py add
+
+link-account:
+	.venv/bin/python scripts/users.py link

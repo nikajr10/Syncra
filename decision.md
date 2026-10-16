@@ -352,7 +352,29 @@ Code-level details are in [`progress.md`](progress.md), and how the parts work t
 
 ---
 
-## 20. Chat-side models (picked, not built yet)
+## 20. Users and login
+
+**Local accounts with a password, as Task 5.1 asks.** Company sign-in (Google, Okta or GitHub) is still yours to pick for Phase 9. It would sit in front of the same tokens: after the sign-in callback, Syncra hands out a token exactly as the password login does.
+
+**Passwords are hashed with scrypt from Python's standard library.** It is one of the three hashes `security.md` accepts (with bcrypt and argon2), so no extra package is needed. The settings are OWASP's minimum (16 MiB of memory per hash), and one check takes about 0.16 seconds, which makes guessing slow. The settings are stored with each hash, so they can be raised later without breaking old passwords.
+
+**A login is a random token kept in Postgres, not a signed JWT.** The database stores only its SHA-256, so a copy of the database holds no usable logins. Logging out deletes the row and expiry is a timestamp, with no signing secret to manage. A JWT can't be revoked before it expires without keeping a list in the database anyway.
+
+**Tokens expire after 12 hours** (`TOKEN_TTL_HOURS`), about a working day. Expired ones are deleted whenever someone logs in, so no cleanup job is needed.
+
+**A wrong password and an unknown username get the same answer, after the same work.** Otherwise the reply or its timing would tell an attacker which usernames exist.
+
+**Only admins link GitHub, Jira and Slack accounts to users (your call).** From Phase 6 those accounts decide what a user may search, so letting users claim accounts themselves would let anyone claim a colleague's Slack account and read their private channels. Users see their own links. Self-service linking with a real sign-in to each tool can come with the Phase 9 settings screen.
+
+**Admin work is two commands for now**, `make add-user` and `make link-account`, the same way connecting a source is one SQL row. Admin endpoints would need an admin role check and more to secure, for a job done a handful of times. The password is typed at a hidden prompt, never as a command argument, so it can't end up in the shell history.
+
+**Every endpoint except `/health` and the login itself needs a token.** A test asks every endpoint in the API's own list without a token, with a made-up one and with a malformed header, so a new endpoint that forgets the login check fails the tests.
+
+**No login rate limit in the app yet.** `security-audit.md` puts it on the reverse proxy for Phase 9 (5 tries a minute per address), and until then the API listens only on the machine itself.
+
+---
+
+## 21. Chat-side models (picked, not built yet)
 
 **These are configured but not built or tested yet.** Where your design names only a kind of model, the usual small version of it was picked, and Phases 5–7 will check them.
 
@@ -374,7 +396,7 @@ Code-level details are in [`progress.md`](progress.md), and how the parts work t
 
 **Where Syncra will be deployed.** The server, the domain, where backups go and how secrets are stored decide the rest of the production setup (`security-audit.md` §9).
 
-**Company sign-in or separate accounts for login (Phase 9).** Company sign-in (Google, Okta or GitHub) avoids storing passwords at all.
+**Company sign-in for Phase 9?** Local accounts with passwords exist now (section 20). Company sign-in (Google, Okta or GitHub) would avoid storing passwords at all, and can hand out the same tokens.
 
 **A Hugging Face token for Prompt Guard 2**, needed before Task 5.4.
 

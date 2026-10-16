@@ -8,7 +8,7 @@ Parts that don't exist yet are marked **(planned)**. For why things were built t
 
 ## The big picture
 
-Syncra is two programs sharing one PostgreSQL database. The **worker** (`make worker`) wakes up every 15 minutes, pulls new activity from GitHub, Jira and Slack, and turns it into searchable knowledge. The **API** (`make run`) is the door the chat will use; today it only answers a health check.
+Syncra is two programs sharing one PostgreSQL database. The **worker** (`make worker`) wakes up every 15 minutes, pulls new activity from GitHub, Jira and Slack, and turns it into searchable knowledge. The **API** (`make run`) is the door the chat uses; today it handles logins, and the chat endpoints arrive during Phase 5.
 
 Everything runs on your own machine. The large language models (Qwen3) run in Ollama, the small models run inside the Python process, and all data lives in the one database. Nothing is sent to an outside AI service.
 
@@ -108,7 +108,7 @@ The run as a whole stops only if fetching or triage can't run at all, for exampl
 
 ### Step 8: Merge people
 
-At the end of every run, people are merged for each Syncra user who linked their accounts. For example, `github:alice`, `slack:U01` and the display name `Alice Chen` become one person. Users and linked accounts arrive with Task 5.1; until then, each account is a person of its own.
+At the end of every run, people are merged for each Syncra user whose accounts an admin linked (`make link-account`, Task 5.1). For example, `github:alice`, `slack:U01` and the display name `Alice Chen` become one person. An account nobody linked stays a person of its own.
 
 ### Step 9: Report
 
@@ -130,7 +130,9 @@ The run logs one line such as `learn: {'sources': 2, 'noise': 2, 'learned': 3, '
 
 **`decisions`** holds one row per conversation that decided something: the decision, the reason, the deciders' account ids, a link to the source and the date of the conversation's last activity.
 
-**`users`, `user_source_identities`, `chat_sessions`, `chat_messages` and `actions`** exist already but stay empty until Phase 5 and later: logins, linked accounts, chat history and approval cards.
+**`users` and `user_source_identities`** hold the Syncra users and the GitHub, Jira and Slack accounts an admin linked to each. **`auth_tokens`** holds one row per login: the SHA-256 of the token and when it expires, never the token itself.
+
+**`chat_sessions`, `chat_messages` and `actions`** exist already but stay empty until later in Phase 5 and Phase 8: chat history and approval cards.
 
 ---
 
@@ -166,7 +168,7 @@ The exact wording changes from run to run, but the real qwen3:8b found both deci
 
 **Deleting a source** deletes its items, and with them their chunks, decisions and links. The entities and people it introduced stay.
 
-**A user linking their accounts** (from Phase 5) merges that person's records on the next run.
+**An admin linking a user's accounts** merges that person's records on the next run.
 
 **Ollama being down** fails only the conversations that needed it, and they're retried on the next run.
 
@@ -174,9 +176,11 @@ The exact wording changes from run to run, but the real qwen3:8b found both deci
 
 ## The API today
 
-`make run` starts the FastAPI app at `http://127.0.0.1:8000`. Its only endpoint is `GET /health`, which answers `{"status": "ok"}`. Every response carries security headers and a request id, and unexpected errors return only "Internal server error" with that id, never internal details.
+`make run` starts the FastAPI app at `http://127.0.0.1:8000`. `GET /health` answers `{"status": "ok"}` without a login; every other endpoint needs one. Every response carries security headers and a request id, and unexpected errors return only "Internal server error" with that id, never internal details.
 
-The interactive docs at `/docs` are on locally (`API_DOCS=true` in `.env`) and always off in production. In production the API listens only on the server itself until login exists.
+**Logging in.** An admin creates users with `make add-user`; passwords are stored only as scrypt hashes. `POST /auth/login` checks the password and hands out a random token, and `auth_tokens` keeps only its SHA-256 with an expiry (12 hours by default). Each later request sends `Authorization: Bearer <token>`; the API hashes it, finds the user, and answers 401 if the token is missing, unknown or expired. `POST /auth/logout` deletes the token, and `GET /me` shows the user and the accounts an admin linked to them.
+
+The interactive docs at `/docs` are on locally (`API_DOCS=true` in `.env`) and always off in production. In production the API listens only on the server itself until the Phase 9 hardening (TLS proxy, rate limits) is in place.
 
 ---
 
@@ -184,7 +188,7 @@ The interactive docs at `/docs` are on locally (`API_DOCS=true` in `.env`) and a
 
 None of this is built yet. It's how the design in `description.md` will use what the worker stores, with the task that builds each step in brackets.
 
-1. **Who's asking.** The user logs in with a token, and the GitHub, Jira and Slack accounts they linked decide what they may see (5.1).
+1. **Who's asking** (built). The user logs in with a token, and the GitHub, Jira and Slack accounts an admin linked to them decide what they may see (5.1).
 2. **Memory.** The last 10 turns of the chat are loaded from `chat_messages` (5.2).
 3. **Rewrite.** If there is history, qwen3:4b turns a follow-up like "who built it?" into a standalone question like "who built the payment service?" (5.3).
 4. **Safety.** Prompt Guard 2 blocks prompt-injection and jailbreak attempts with a polite reply (5.4).
@@ -227,4 +231,4 @@ All paths are under `backend/`.
 - Every model call: `app/models/gateway.py`, with the models listed in `config/models.yaml`
 - Settings: `app/config/settings.py`, reading `.env`
 - Tables: `app/db/schema.py`, created by the files in `migrations/versions/`
-- The API: `app/api/main.py`
+- The API: `app/api/main.py`; users, logins and linked accounts: `app/api/auth.py` (the admin commands are `scripts/users.py`)

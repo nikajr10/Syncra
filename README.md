@@ -32,6 +32,20 @@ make worker       # learning pipeline: sync + learn every SYNC_INTERVAL_MINUTES 
 make lint         # ruff check + format check
 ```
 
+## Users and login
+
+Every API endpoint except `/health` needs a login. An admin creates each user and links their GitHub, Jira and Slack accounts. Only admins can link accounts, because from Phase 6 those accounts decide what a user may search.
+
+```bash
+cd backend
+make add-user         # asks for a username, a display name and a password
+make link-account     # asks for the username, the tool (github, jira or slack) and the account id
+```
+
+The account id is the GitHub login, the Jira accountId, or the Slack member id (`U0123…`, from the person's Slack profile → ⋮ → Copy member ID). The next learning run merges a user's accounts into one person.
+
+`POST /auth/login` with `{"username": "…", "password": "…"}` returns a token. Send it as `Authorization: Bearer <token>` until it expires (`TOKEN_TTL_HOURS`, 12 by default); `POST /auth/logout` ends it and `GET /me` shows who is logged in. In `/docs`, click **Authorize** and paste the token.
+
 ## Connect a source
 
 Put the credentials in `backend/.env` (`GITHUB_TOKEN`, `JIRA_BASE_URL` + `JIRA_EMAIL` + `JIRA_API_TOKEN`, `SLACK_BOT_TOKEN` + `SLACK_WORKSPACE_URL`) and insert one row per repo / project / channel into the `sources` table (a UI comes in Phase 9):

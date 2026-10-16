@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 
+from app.api import auth
 from app.config.settings import get_models_config, get_settings
 
 log = logging.getLogger("syncra.api")
@@ -64,3 +65,6 @@ async def security(request: Request, call_next: Callable[[Request], Awaitable[Re
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+app.include_router(auth.router)

@@ -68,6 +68,9 @@ class Settings(BaseSettings):
     decision_min_chars: int = 60
     decision_max_chars: int = 6000
 
+    # --- login: a bearer token stops working this many hours after it was handed out ---
+    token_ttl_hours: int = 12
+
     # --- misc ---
     log_level: str = "INFO"
     api_docs: bool = False  # /docs, /redoc, /openapi.json; off unless set (local dev turns it on)
