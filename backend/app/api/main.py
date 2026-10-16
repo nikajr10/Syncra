@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
 from app.api import auth, chat
 from app.config.settings import get_models_config, get_settings
@@ -24,6 +25,25 @@ SECURITY_HEADERS = {
 STRICT_CSP = "default-src 'none'; frame-ancestors 'none'"
 DOCS_PATHS = ("/docs", "/redoc", "/openapi.json")
 
+# The API documentation: Swagger UI at /docs and ReDoc at /redoc, both built from these and
+# from each endpoint's summary, docstring and response model. Only served when API_DOCS is on.
+DESCRIPTION = """
+Syncra answers questions about your team's GitHub, Jira and Slack, and shows its sources.
+
+**Logging in here.** An admin creates your user with `make add-user`. Open **POST /auth/login**,
+click *Try it out*, send your username and password, and copy the `token` from the answer. Then
+click **Authorize** (top right), paste the token and close the dialog: every endpoint now runs
+as you, until the token expires or you log out.
+"""
+TAGS = [
+    {"name": "Login", "description": "Log in for a token, log out, and see who you are."},
+    {
+        "name": "Chat",
+        "description": "Your chats and their messages. You only ever see your own chats.",
+    },
+    {"name": "Health", "description": "Is the API up? No login needed."},
+]
+
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -35,7 +55,9 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
 _docs = get_settings().api_docs
 app = FastAPI(
-    title="Syncra",
+    title="Syncra API",
+    description=DESCRIPTION,
+    openapi_tags=TAGS,
     lifespan=lifespan,
     docs_url="/docs" if _docs else None,
     redoc_url="/redoc" if _docs else None,
@@ -62,9 +84,13 @@ async def security(request: Request, call_next: Callable[[Request], Awaitable[Re
     return response
 
 
-@app.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok"}
+class Health(BaseModel):
+    status: str = "ok"
+
+
+@app.get("/health", tags=["Health"], summary="Is the API up?")
+def health() -> Health:
+    return Health()
 
 
 app.include_router(auth.router)

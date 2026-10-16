@@ -29,6 +29,7 @@ Browse the database in DBeaver: host `localhost`, port `5434`, database `syncra`
 ```bash
 cd backend
 make run          # API on http://127.0.0.1:8000  (GET /health -> {"status": "ok"})
+                  # API documentation (Swagger UI): http://127.0.0.1:8000/docs, or ReDoc at /redoc
 make worker       # learning pipeline: sync + learn every SYNC_INTERVAL_MINUTES (needs Ollama)
 make lint         # ruff check + format check
 ```

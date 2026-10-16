@@ -10,6 +10,27 @@ Live record of what has been built. Agents add an entry here after every task (f
 
 ## Log
 
+### API documentation (not a phase task)  ✅ done
+**Date:** 2026-10-16
+
+**Built**
+- Swagger UI (`/docs`) and ReDoc (`/redoc`) now document the API instead of listing it: title "Syncra API", a description that explains logging in with **Authorize**, three groups (Login, Chat, Health), a plain summary per endpoint, response models (`Health`, `Token`, `Me` / `Account`, `Chat`, `Message`) instead of untyped dicts, examples on request bodies, and the 401 / 404 answers.
+- The chat endpoints return their database rows through `response_model` (pydantic `from_attributes`), so the hand-built dicts are gone.
+- `tests/test_api_docs.py`: every endpoint has a known group and a named response model, and every protected one shows the Bearer lock and its 401.
+
+**Key files**
+- `backend/app/api/main.py`, `backend/app/api/auth.py`, `backend/app/api/chat.py`, `backend/tests/test_api_docs.py`
+
+**Decisions**
+- The docs come from FastAPI itself (no new package, no hand-written swagger file that would drift). Still served only when `API_DOCS` is on, never in production (security pass S-07).
+- New endpoints declare a response model (return type or `response_model=`), a `summary=`, and their error answers (`UNAUTHORIZED` from `app/api/auth.py`, the chat router's `NOT_FOUND`). `test_api_docs.py` checks the group, the response model and, on protected endpoints, the lock and the 401.
+
+**How to run / test**
+- `make run`, then open http://127.0.0.1:8000/docs · `make test`
+
+**Known issues / TODO**
+- Swagger UI loads its scripts from a CDN (jsDelivr), so `/docs` needs internet access; `/openapi.json` works offline.
+
 ### Task 5.5 — Intent router (SetFit)  ✅ done
 **Date:** 2026-10-16
 

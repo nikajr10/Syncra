@@ -34,6 +34,8 @@ Code-level details are in [`progress.md`](progress.md), and how the parts work t
 
 **FastAPI for the web API, instead of Flask or Django.** It checks requests and responses with pydantic, which Syncra already uses for settings and items, and it has async and streaming built in for word-by-word answers. Django would bring its own database layer and admin that compete with SQLAlchemy, and Flask would need add-ons for validation and async.
 
+**The API documentation is FastAPI's own Swagger page**, at `/docs` (and ReDoc at `/redoc`). It is generated from the code: each endpoint's group, one-line summary, request and response models, and its error codes. A hand-written `swagger.yaml` would drift from the code, and a separate docs tool would be one more package. A test fails if an endpoint returns an undocumented shape or forgets its login check in the docs. Like before, the page is off in production.
+
 **All backend code in `backend/`, as one package called `app`.** The first version was built at the repo root, because deleting the old empty scaffold (125 zero-byte files) was blocked at first. When you asked for everything in `backend/`, the scaffold was removed and the code moved in.
 
 **The package is split by job:** `api`, `learning`, `chat`, `models`, `db`, `jobs` and `config`, with the yaml files in `backend/config/`. `app` is the name the FastAPI docs use, so imports read `from app.api.main import app`.

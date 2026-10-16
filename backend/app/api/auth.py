@@ -18,7 +18,7 @@ import hmac
 import re
 import secrets
 from datetime import UTC, datetime, timedelta
-from typing import Annotated, Any
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -30,8 +30,9 @@ from app.config.settings import get_settings
 from app.db.engine import get_db
 from app.db.schema import AuthToken, User, UserSourceIdentity
 
-router = APIRouter()
-bearer = HTTPBearer()  # no `Authorization: Bearer …` header -> 401
+router = APIRouter(tags=["Login"])
+bearer = HTTPBearer(description="The `token` from POST /auth/login.")  # no header -> 401
+UNAUTHORIZED = {401: {"description": "No valid token: missing, unknown or expired"}}
 
 USERNAME = re.compile(r"[a-z0-9][a-z0-9._-]{0,99}")
 ACCOUNT_ID = {  # what follows "github:" / "jira:" / "slack:" in the authors the connectors store
@@ -90,12 +91,34 @@ CurrentUser = Annotated[User, Depends(current_user)]
 
 
 class Login(BaseModel):
-    username: str = Field(max_length=100)
-    password: str = Field(max_length=1024)
+    username: str = Field(max_length=100, examples=["alice"])
+    password: str = Field(max_length=1024, examples=["correct horse battery"])
 
 
-@router.post("/auth/login")
-def login(body: Login, session: DB) -> dict[str, Any]:
+class Token(BaseModel):
+    token: str = Field(description="Send it as `Authorization: Bearer <token>`.")
+    expires_at: datetime
+
+
+class Account(BaseModel):
+    tool: str = Field(examples=["slack"], description="github, jira or slack")
+    id: str = Field(examples=["U0123ABCD"], description="The account's id in that tool")
+    display_name: str | None = Field(examples=["Alice Chen"])
+
+
+class Me(BaseModel):
+    username: str = Field(examples=["alice"])
+    display_name: str | None = Field(examples=["Alice Chen"])
+    accounts: list[Account] = Field(description="The accounts an admin linked to this user")
+
+
+@router.post(
+    "/auth/login",
+    summary="Log in",
+    responses={401: {"description": "Wrong username or password"}},
+)
+def login(body: Login, session: DB) -> Token:
+    """Check the username and password and hand out a token that works for TOKEN_TTL_HOURS."""
     user = session.scalar(select(User).where(User.username == body.username.strip().lower()))
     if not verify_password(body.password, user.password_hash if user else None):
         raise HTTPException(401, "Wrong username or password")
@@ -104,32 +127,33 @@ def login(body: Login, session: DB) -> dict[str, Any]:
     session.execute(delete(AuthToken).where(AuthToken.expires_at <= func.now()))  # tidy up
     session.add(AuthToken(user_id=user.id, token_hash=_digest(token), expires_at=expires_at))
     session.commit()
-    return {"token": token, "expires_at": expires_at}
+    return Token(token=token, expires_at=expires_at)
 
 
-@router.post("/auth/logout", status_code=204)
+@router.post("/auth/logout", status_code=204, summary="Log out", responses=UNAUTHORIZED)
 def logout(credentials: Credentials, _: CurrentUser, session: DB) -> None:
+    """The token stops working at once."""
     token_hash = _digest(credentials.credentials)
     session.execute(delete(AuthToken).where(AuthToken.token_hash == token_hash))
     session.commit()
 
 
-@router.get("/me")
-def me(user: CurrentUser, session: DB) -> dict[str, Any]:
+@router.get("/me", summary="Who am I?", responses=UNAUTHORIZED)
+def me(user: CurrentUser, session: DB) -> Me:
     """Who is logged in, and the accounts an admin linked to them."""
     accounts = session.scalars(
         select(UserSourceIdentity)
         .where(UserSourceIdentity.user_id == user.id)
         .order_by(UserSourceIdentity.id)
     )
-    return {
-        "username": user.username,
-        "display_name": user.display_name,
-        "accounts": [
-            {"tool": a.source_kind, "id": a.external_id, "display_name": a.display_name}
+    return Me(
+        username=user.username,
+        display_name=user.display_name,
+        accounts=[
+            Account(tool=a.source_kind, id=a.external_id, display_name=a.display_name)
             for a in accounts
         ],
-    }
+    )
 
 
 # --- admin (scripts/users.py) ---------------------------------------------------------------
