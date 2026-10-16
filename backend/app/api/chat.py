@@ -1,4 +1,4 @@
-"""Chat endpoints: a user's chats and their messages (Task 5.2).
+"""Chat endpoints: a user's chats and their messages (Task 5.2), and sending one (Task 5.6).
 
 Every endpoint needs a login, and a user only ever sees their own chats: someone else's chat
 answers 404, exactly like a chat that doesn't exist.
@@ -8,14 +8,16 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from datetime import datetime
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.auth import DB, UNAUTHORIZED, CurrentUser
+from app.chat import pipeline
+from app.config.settings import get_settings
 from app.db.schema import ChatMessage, ChatSession, User
 
 router = APIRouter(prefix="/chat", tags=["Chat"], responses=UNAUTHORIZED)
@@ -42,6 +44,21 @@ class Message(BaseModel):
     sources: list[dict[str, Any]] = Field(description="The evidence an answer cites")
     confidence: str | None = Field(description="high, medium or low, on answers")
     created_at: datetime
+
+
+class NewMessage(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    message: str = Field(
+        min_length=1,
+        max_length=get_settings().chat_message_max_chars,
+        examples=["who built the payment service?"],
+    )
+
+
+def chat_models() -> dict[str, Any]:
+    """Models for `pipeline.reply` instead of its defaults: none. Tests override this."""
+    return {}
 
 
 def own_chat(session: Session, user: User, chat_id: int) -> ChatSession:
@@ -83,3 +100,18 @@ def messages(chat_id: int, user: CurrentUser, session: DB) -> Sequence[ChatMessa
     return session.scalars(
         select(ChatMessage).where(ChatMessage.session_id == chat.id).order_by(ChatMessage.id)
     ).all()
+
+
+@router.post("/sessions/{chat_id}/messages", summary="Send a message", responses=NOT_FOUND)
+def send(
+    chat_id: int,
+    body: NewMessage,
+    user: CurrentUser,
+    session: DB,
+    models: Annotated[dict[str, Any], Depends(chat_models)],
+) -> pipeline.Reply:
+    """Reply to one message and save the turn. `path` says how it was handled: `small_talk`
+    (an instant reply), `question` or `action`, or `blocked` (a prompt attack, not saved).
+    `question` is the message rewritten to stand on its own."""
+    chat = own_chat(session, user, chat_id)
+    return pipeline.reply(session, chat, body.message, **models)

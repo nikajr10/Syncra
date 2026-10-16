@@ -7,6 +7,8 @@
   `<role>_base` body and saved under TRAINED_MODELS_DIR; `train_setfit_held_out(role)` trains
   one on its labelled examples in config/<role>.yaml and scores it.
 - `load_gliner(role)` / `find_entities(role, texts)`: GLiNER entity finder.
+- `load_classifier(role)` / `label_scores(role, texts, label)`: Hugging Face text classifiers
+  (Prompt Guard 2), scored over the whole text in model-sized windows.
 
 Models are addressed by **role** from config/models.yaml (e.g. "answer_writer"), never by name.
 Every call logs model name, time taken and token / item count.
@@ -264,6 +266,54 @@ def find_entities(role: str, texts: list[str]) -> list[list[tuple[str, str, floa
     hits = load_gliner(role).inference(texts, spec.labels, threshold=spec.threshold)
     _log_call(spec.name, started, items=len(texts))
     return [[(h["text"], h["label"], h["score"]) for h in text_hits] for text_hits in hits]
+
+
+@lru_cache
+def load_classifier(role: str):  # noqa: ANN201 - heavy import kept lazy
+    """(tokenizer, model) of a Hugging Face text classifier, e.g. Prompt Guard 2."""
+    from transformers import AutoModelForSequenceClassification, AutoTokenizer
+
+    spec = get_models_config()[role]
+    token = get_settings().hf_token
+    started = time.perf_counter()
+    tokenizer = AutoTokenizer.from_pretrained(spec.name, revision=spec.revision, token=token)
+    model = AutoModelForSequenceClassification.from_pretrained(
+        spec.name, revision=spec.revision, token=token
+    )
+    model.to(device()).eval()
+    _log_call(spec.name, started, loaded_on=device())
+    return tokenizer, model
+
+
+def label_scores(
+    role: str, texts: list[str], label: str, window: int = 512, overlap: int = 64
+) -> list[float]:
+    """How likely each text is `label` (0-1). A text longer than the model's `window` tokens is
+    read in windows that overlap by `overlap` tokens, and its highest-scoring window counts."""
+    if not texts:
+        return []
+    import torch
+
+    tokenizer, model = load_classifier(role)
+    started = time.perf_counter()
+    pieces = tokenizer(
+        texts,
+        truncation=True,
+        max_length=window,
+        stride=overlap,
+        return_overflowing_tokens=True,
+        padding=True,
+        return_tensors="pt",
+    )
+    owners = pieces.pop("overflow_to_sample_mapping").tolist()  # piece -> index of its text
+    with torch.no_grad():
+        probabilities = model(**pieces.to(device())).logits.softmax(-1)
+    scores = [0.0] * len(texts)
+    wanted = probabilities[:, model.config.label2id[label]].tolist()
+    for owner, p in zip(owners, wanted, strict=True):
+        scores[owner] = max(scores[owner], p)
+    _log_call(get_models_config()[role].name, started, items=len(texts), pieces=len(owners))
+    return scores
 
 
 def rerank(role: str, query: str, candidates: list[str]) -> list[float]:

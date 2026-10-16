@@ -68,6 +68,9 @@ class Settings(BaseSettings):
     decision_min_chars: int = 60
     decision_max_chars: int = 6000
 
+    # --- chat: the longest message a user may send, in characters ---
+    chat_message_max_chars: int = 4000
+
     # --- question rewriter, in characters: only the newest part of the chat history is sent
     #     (qwen3:4b runs with 4096 tokens of context in Ollama) ---
     rewriter_max_chars: int = 4000
