@@ -390,6 +390,16 @@ Code-level details are in [`progress.md`](progress.md), and how the parts work t
 
 **If the rewriter fails, the message is used as it is**, with a warning in the log. The user is waiting, so there is no retry, and searching for "who reviewed it?" literally is better than an error. The decision reader is different: it runs in the background, so it retries or waits for the next run.
 
+**Small talk gets a canned reply, chosen by a few keywords.** "thanks" gets "You're welcome!", "bye" a goodbye, "what can you do?" a short explanation and a greeting a greeting. There is no search and no LLM, so the reply takes milliseconds, as your design asks; writing it with the LLM would make "thanks" wait a second or more.
+
+**The intent router learned from 321 hand-written messages**, with look-alikes on purpose: "how do I open a ticket?" is a question but "open a ticket for it" is an action, and a bare "PAY-1234" is a question. It scored 98.5% on the messages held back from training, and got all 35 messages written afterwards right.
+
+**It trains with 20 example pairs per message instead of triage's 5.** Over six different splits it averaged 97% with 20 and 92% with 5, as good as a five times bigger model. Triage didn't gain from more pairs; telling "how do I open a ticket?" from "open a ticket" does. The number is set per classifier in `models.yaml`.
+
+**No "when unsure, call it a question" rule.** Sending the router's unsure answers to the question path fixed as many messages as it broke, so it was dropped.
+
+**Both classifiers are trained the same way**: `make train-triage` and `make train-intent-router` run one script, which trains on 80% of the examples and reports the accuracy on the other 20%.
+
 **The chat history is quoted data for the rewriter**, between tags it can't close, like the decision reader's threads. An answer in the history may quote a planted Slack message, and the rewriter must not follow it.
 
 ---

@@ -19,6 +19,7 @@ make migrate             # creates the tables (alembic upgrade head)
 make pull-models         # ollama pull qwen3:4b + qwen3:8b
 make download-models     # downloads every Hugging Face model from config/models.yaml
 make train-triage        # trains the noise filter on config/triage.yaml (~30 s; again after editing it)
+make train-intent-router # trains the chat's intent router on config/intent_router.yaml (~25 s; same)
 ```
 
 Browse the database in DBeaver: host `localhost`, port `5434`, database `syncra`, user = your macOS user name, no password (Homebrew default).
@@ -69,7 +70,8 @@ cp .env.example .env     # set POSTGRES_PASSWORD (and HF_TOKEN if you use gated 
 docker compose up -d --build
 docker compose exec ollama ollama pull qwen3:4b && docker compose exec ollama ollama pull qwen3:8b
 docker compose run --rm api python scripts/download_hf_models.py
-docker compose run --rm api python scripts/train_triage.py
+docker compose run --rm api python scripts/train.py triage
+docker compose run --rm api python scripts/train.py intent_router
 ```
 
 The API listens on `127.0.0.1:API_PORT` (default 8000) only: put a TLS reverse proxy (Caddy / nginx) in front of it, and don't make it public before login exists (Phase 9). API docs (`/docs`) are off in production. The compose Postgres is reachable from the host only on `127.0.0.1:POSTGRES_PORT`. For an NVIDIA GPU, build with `--build-arg TORCH_INDEX_URL=https://download.pytorch.org/whl/cu124` and uncomment the GPU reservation on the `ollama` service.

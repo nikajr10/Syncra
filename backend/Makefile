@@ -1,5 +1,5 @@
 .PHONY: install run worker test lint fmt pull-models download-models train-triage db-init migrate \
-	add-user link-account
+	train-intent-router add-user link-account
 
 PYTHON ?= python3.12
 
@@ -30,7 +30,10 @@ download-models:
 	.venv/bin/python scripts/download_hf_models.py
 
 train-triage:
-	.venv/bin/python scripts/train_triage.py
+	.venv/bin/python scripts/train.py triage
+
+train-intent-router:
+	.venv/bin/python scripts/train.py intent_router
 
 db-init:
 	.venv/bin/python scripts/init_local_db.py

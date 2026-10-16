@@ -38,7 +38,7 @@ question -> rewrite -> safety check -> intent -> search -> rerank -> answer -> c
 
 `backend/.env` tells Syncra where the database is (`DATABASE_URL`) and holds the source tokens. `config/models.yaml` lists every model by its job, and `config/prompts/` holds the instructions given to the LLM. If a required setting is missing, the API refuses to start and names it.
 
-`make db-init` creates the database and `make migrate` creates the tables. `make pull-models` and `make download-models` fetch the models once, and `make train-triage` trains the noise filter on the examples in `config/triage.yaml` (about 30 seconds). The worker can't learn without that trained filter.
+`make db-init` creates the database and `make migrate` creates the tables. `make pull-models` and `make download-models` fetch the models once, and `make train-triage` trains the noise filter on the examples in `config/triage.yaml` (about 30 seconds). The worker can't learn without that trained filter. `make train-intent-router` trains the chat's intent router the same way, on `config/intent_router.yaml`.
 
 A source is connected by adding one row to the `sources` table: a GitHub repo (`acme/payments`), a Jira project key (`PAY`) or a Slack channel id (`C0123456789`). A screen for this comes in Phase 9.
 
@@ -192,7 +192,7 @@ None of this is built yet. It's how the design in `description.md` will use what
 2. **Memory** (built). The last 10 turns of the chat are loaded from `chat_messages`, oldest first. A turn is one user message and the replies after it (5.2).
 3. **Rewrite** (built). If there is history, qwen3:4b turns a follow-up like "who reviewed it?" into a standalone question like "Who reviewed the payment service?" (5.3). It sees the newest 4000 characters of the chat as quoted data and answers in JSON, at temperature 0 so the same follow-up always gets the same rewrite. A first message skips the model, and if the model fails the message is used as it is.
 4. **Safety.** Prompt Guard 2 blocks prompt-injection and jailbreak attempts with a polite reply (5.4).
-5. **Intent.** A second SetFit classifier picks the path. Small talk gets an instant reply with no search, a request to *do* something goes to an approval card, and a question carries on (5.5).
+5. **Intent** (built). A second SetFit classifier, trained on `config/intent_router.yaml`, picks the path in a few milliseconds. Small talk gets an instant canned reply with no search and no LLM, a request to *do* something goes to an approval card, and a question carries on (5.5).
 6. **Search.** Three searches run at the same time, and each only looks at items whose access tags the user has; that filter sits inside the query itself (6.1). Vector search embeds the question with the same Qwen3-Embedding model and finds the closest chunks (6.2). Keyword search matches exact terms like `PAY-1234` (6.3). Graph search finds the entities named in the question through their aliases and follows links to related decisions and chunks (6.4).
 7. **Rerank.** A cross-encoder scores every match against the question, and the best 8 become the evidence `E1`…`E8` (6.5).
 8. **Answer.** qwen3:8b writes the answer only from that evidence, cites it as `[E1]`, and streams it word by word. If the evidence isn't enough, it says it doesn't know (7.1–7.2).
@@ -232,4 +232,4 @@ All paths are under `backend/`.
 - Settings: `app/config/settings.py`, reading `.env`
 - Tables: `app/db/schema.py`, created by the files in `migrations/versions/`
 - The API: `app/api/main.py`; users, logins and linked accounts: `app/api/auth.py` (the admin commands are `scripts/users.py`); chats: `app/api/chat.py`
-- Chat memory: `app/chat/memory.py`; the question rewriter: `app/chat/rewrite.py`, with its prompt in `config/prompts/question_rewriter.v1.yaml`
+- Chat memory: `app/chat/memory.py`; the intent router: `app/chat/intent.py`, trained by `scripts/train.py`; the question rewriter: `app/chat/rewrite.py`, with its prompt in `config/prompts/question_rewriter.v1.yaml`

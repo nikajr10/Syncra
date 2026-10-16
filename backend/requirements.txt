@@ -22,7 +22,8 @@
 #
 #   spaCy: en_core_web_sm — installed by pip below.
 #
-#   Trained locally: triage head (`make train-triage`).
+#   Trained locally: the triage and intent router classifiers (`make train-triage`,
+#   `make train-intent-router`).
 # ---------------------------------------------------------------------------
 
 fastapi>=0.115

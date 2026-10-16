@@ -475,7 +475,7 @@ flowchart LR
 - [x] 5.2 Chat sessions and memory
 - [x] 5.3 Question rewriter
 - [ ] 5.4 Prompt guard
-- [ ] 5.5 Intent router (SetFit)
+- [x] 5.5 Intent router (SetFit)
 - [ ] 5.6 Chat endpoint (skeleton)
 
 **Phase 6 — Find evidence**

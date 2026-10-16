@@ -90,6 +90,7 @@ class ModelSpec(BaseModel):
     threshold: float = 0.5  # GLiNER: drop hits scoring lower; entity_linker: merge names this alike
     prompt: str | None = None  # Ollama: config/prompts/<prompt>.yaml, versioned by name (".v1")
     options: dict[str, Any] = {}  # Ollama: sent with every call for the role, e.g. temperature
+    iterations: int = 5  # SetFit body (<role>_base): training pairs per example
 
 
 class ModelsConfig(BaseModel):

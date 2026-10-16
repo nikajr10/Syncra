@@ -207,14 +207,16 @@ Start Ollama (open the **Ollama** app once, or run `ollama serve` in a separate 
 make pull-models        # Ollama LLMs: qwen3:4b and qwen3:8b   (~8 GB)
 make download-models    # Hugging Face models from config/models.yaml (embeddings, reranker, …)
 make train-triage       # trains the noise filter (~30 s), prints "Held-out accuracy: 9x.x%"
+make train-intent-router  # trains the chat's intent router (~25 s), prints its accuracy too
 ```
 
 - Models are listed in `backend/config/models.yaml`. Change models there, not in code.
 - `meta-llama/Llama-Prompt-Guard-2-86M` is **gated**: it needs a Hugging Face token, which you'll get later.
   Until then it's skipped (the script says so); the rest still download.
 - Downloads are big and slow — do this on good Wi-Fi. You only do it once.
-- `make train-triage` saves the noise filter in `backend/trained_models/` (not in git). Run it again
-  whenever `backend/config/triage.yaml` changes after a `git pull`.
+- `make train-triage` and `make train-intent-router` save their classifiers in `backend/trained_models/`
+  (not in git). Run each again whenever its examples (`backend/config/triage.yaml`,
+  `backend/config/intent_router.yaml`) change after a `git pull`.
 
 ---
 
@@ -273,6 +275,7 @@ cd backend
 make install        # only if pyproject.toml changed (new packages)
 make migrate        # only if new migrations came in (safe to run anyway)
 make train-triage   # only if config/triage.yaml changed
+make train-intent-router   # only if config/intent_router.yaml changed
 make run
 ```
 
@@ -301,6 +304,8 @@ Postgres (`brew services`) and Ollama keep running in the background.
 **Port 8000 already in use**: find what's using it with `lsof -i :8000`, or run the API on another port with `.venv/bin/uvicorn app.api.main:app --reload --port 8001`.
 
 **`No trained triage classifier in …`**: run `make train-triage`.
+
+**`No trained intent_router classifier in …`**: run `make train-intent-router`.
 
 **Packages behaving strangely**: rebuild the venv with `rm -rf .venv && make install`.
 

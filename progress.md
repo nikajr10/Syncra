@@ -5,10 +5,39 @@ Live record of what has been built. Agents add an entry here after every task (f
 ## Current status
 
 - **Current phase:** Phase 5 — Chat basics (Phase 4 complete: the learning pipeline runs end to end)
-- **Next task:** 5.4 — Prompt guard (needs `HF_TOKEN` in `backend/.env`; 5.5 can go first)
-- **Completed tasks:** 0.1–0.6 (Phase 0 complete), 1.1–1.6 (Phase 1 complete), 2.1–2.3 (Phase 2 complete), 3.1–3.4 (Phase 3 complete), 4.1–4.4 (Phase 4 complete), 5.1–5.3
+- **Next task:** 5.4 — Prompt guard (needs `HF_TOKEN` in `backend/.env`), then 5.6
+- **Completed tasks:** 0.1–0.6 (Phase 0 complete), 1.1–1.6 (Phase 1 complete), 2.1–2.3 (Phase 2 complete), 3.1–3.4 (Phase 3 complete), 4.1–4.4 (Phase 4 complete), 5.1–5.3, 5.5
 
 ## Log
+
+### Task 5.5 — Intent router (SetFit)  ✅ done
+**Date:** 2026-10-16
+
+**Built**
+- `config/intent_router.yaml`: 321 hand-written chat messages, 97 `small_talk` / 133 `question` / 91 `action`. Look-alikes on purpose: "how do I open a ticket in jira?" is a question and "open a ticket for it" an action; "hi, who built X?" is a question and "thanks, now open a ticket for it" an action; bare ids ("PAY-1234") and short follow-ups ("and billing?", "why?") are questions.
+- `app/chat/intent.py`: `route(message, classify=…)` → `small_talk` | `question` | `action` (SetFit role `intent_router`); `small_talk_reply(message)` → an instant canned reply picked by keywords (thanks, bye, help, greeting, otherwise "Got it"), with no search and no LLM.
+- One way to train SetFit classifiers: `gateway.setfit_examples(role)` reads `config/<role>.yaml` (top-level keys = labels) and `gateway.train_setfit_held_out(role)` trains on a stratified 80% (seed 42), saves the classifier and returns its accuracy on the other 20%. Triage uses it too (`triage.examples()` / `triage.train()` are gone). `scripts/train.py <role>` replaces `scripts/train_triage.py`; `make train-triage` and the new `make train-intent-router` call it, and a missing classifier's error names its make target.
+- `ModelSpec.iterations`: SetFit training pairs per example, on the `<role>_base` entry: 5 for triage (as before), 20 for the intent router.
+- **Held-out accuracy: 98.5% (64/65)**, about 65 s on an M2 Pro (MPS). Over six random splits: 97.4% mean, 95.4% worst. 35/35 on messages written afterwards (not in the data). One message routes in ~6 ms once the model is loaded.
+- Tests: the data (three labels, each ≥ 25%, no duplicates); the canned replies; `route` asks the classifier; one real training run (≥ 90%, then "hi" and "thanks" are small talk, a question and a follow-up are questions, a Jira request is an action, and a routed message takes under 1 s).
+
+**Key files**
+- `backend/config/intent_router.yaml`, `backend/app/chat/intent.py`, `backend/app/models/gateway.py`, `backend/scripts/train.py`, `backend/config/models.yaml`, `backend/tests/test_intent.py`
+
+**Decisions**
+- 20 training pairs per example for the intent router: over six splits it scored 97.4% mean (worst 95.4%) against 92.3% (worst 89.2%) with triage's 5, and the same as the 5x larger `paraphrase-mpnet-base-v2` body. Look-alike intents need more contrastive pairs; triage didn't. Set per role in models.yaml (`iterations`).
+- No confidence cut-off: sending low-confidence small talk and actions to "question" fixed as many routes as it broke (6 against 7 at 0.6).
+- The classifier decides that a message is small talk; keywords only pick the canned wording, which lives in code.
+- Like triage, the shipped classifier is the one trained on 80% and scored on the other 20%.
+- Make targets are `train-<role, with - for _>`; `load_setfit` names that command when a classifier is missing.
+
+**How to run / test**
+- `make train-intent-router` (once, and again after editing `config/intent_router.yaml`) · `make test` (the real training test adds about a minute)
+
+**Known issues / TODO**
+- Over six splits the remaining misses were context-free confirmations ("go ahead", "do it"), "how come?", a bare `PAY-1234`, "close PAY-99", "request changes on PR #50" and "list open PRs in acme/payments".
+- All examples are synthetic; add real misrouted messages to `config/intent_router.yaml` and retrain.
+- The chat endpoint that uses the router is Task 5.6.
 
 ### Task 5.3 — Question rewriter  ✅ done
 **Date:** 2026-10-16

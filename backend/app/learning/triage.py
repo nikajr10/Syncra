@@ -10,11 +10,9 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable, Sequence
 
-import yaml
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.config.settings import CONFIG_DIR
 from app.db.schema import Item
 from app.models import gateway
 
@@ -25,27 +23,6 @@ Classify = Callable[[list[str]], list[str]]  # texts -> "useful" | "noise" each
 
 def _model(texts: list[str]) -> list[str]:
     return gateway.classify("triage", texts)
-
-
-def examples() -> tuple[list[str], list[str]]:
-    """(texts, labels) from config/triage.yaml, whose top-level keys are the labels."""
-    data = yaml.safe_load((CONFIG_DIR / "triage.yaml").read_text())
-    pairs = [(text, label) for label, texts in data.items() for text in texts]
-    return [text for text, _ in pairs], [label for _, label in pairs]
-
-
-def train() -> float:
-    """Train on 80% of the examples, save the classifier, return its accuracy on the other 20%."""
-    from sklearn.model_selection import train_test_split
-
-    texts, labels = examples()
-    x_train, x_test, y_train, y_test = train_test_split(
-        texts, labels, test_size=0.2, stratify=labels, random_state=42
-    )
-    gateway.train_setfit("triage", x_train, y_train)
-    hits = sum(p == y for p, y in zip(gateway.classify("triage", x_test), y_test, strict=True))
-    log.info("triage: trained on %d, %d/%d held-out right", len(x_train), hits, len(y_test))
-    return hits / len(y_test)
 
 
 def is_bot(author: str | None) -> bool:

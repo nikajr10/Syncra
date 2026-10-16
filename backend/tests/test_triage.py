@@ -14,7 +14,7 @@ from tests.fakes import item
 
 
 def test_triage_data_has_both_labels_well_represented() -> None:
-    texts, labels = triage.examples()
+    texts, labels = gateway.setfit_examples("triage")
     assert set(labels) == {"useful", "noise"}
     assert 100 <= len(texts) <= 300
     assert all(isinstance(t, str) and t.strip() for t in texts)  # unquoted "a: b" is a dict
@@ -64,7 +64,7 @@ def test_triage_marks_noise_and_skips_it(db_session: Session) -> None:
 def test_trained_classifier_is_accurate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(gateway.get_settings(), "trained_models_dir", tmp_path)
     try:
-        assert triage.train() >= 0.9  # on the held-out 20% of config/triage.yaml
+        assert gateway.train_setfit_held_out("triage") >= 0.9  # held-out 20% of triage.yaml
         assert (tmp_path / "triage" / "model_head.pkl").exists()
         approval = _item("approved:", "review", "github:bob", title="PR #9 review: approved")
         outage = _item("Moving the ledger to the new cluster on Saturday, 5 min of downtime.")

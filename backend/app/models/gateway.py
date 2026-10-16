@@ -4,7 +4,8 @@
 - `load_sentence_transformer(role)` / `load_cross_encoder(role)`: Hugging Face models loaded once,
   cached in memory, on GPU (cuda / mps) when available.
 - `train_setfit(role, ...)` / `classify(role, texts)`: SetFit classifiers trained here from the
-  `<role>_base` body and saved under TRAINED_MODELS_DIR.
+  `<role>_base` body and saved under TRAINED_MODELS_DIR; `train_setfit_held_out(role)` trains
+  one on its labelled examples in config/<role>.yaml and scores it.
 - `load_gliner(role)` / `find_entities(role, texts)`: GLiNER entity finder.
 
 Models are addressed by **role** from config/models.yaml (e.g. "answer_writer"), never by name.
@@ -23,8 +24,9 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+import yaml
 
-from app.config.settings import ConfigError, get_models_config, get_settings
+from app.config.settings import CONFIG_DIR, ConfigError, get_models_config, get_settings
 
 log = logging.getLogger("syncra.models")
 
@@ -294,7 +296,7 @@ def train_setfit(role: str, texts: list[str], labels: list[str]) -> None:
     with tempfile.TemporaryDirectory() as checkpoints:
         args = TrainingArguments(
             output_dir=checkpoints,
-            num_iterations=5,  # pairs per example: as accurate as 20 on the triage data, 4x faster
+            num_iterations=get_models_config()[f"{role}_base"].iterations,  # pairs per example
             report_to="none",
             save_strategy="no",
             logging_strategy="no",
@@ -315,7 +317,8 @@ def load_setfit(role: str):  # noqa: ANN201 - heavy import kept lazy
 
     path = setfit_dir(role)
     if not (path / "model_head.pkl").exists():
-        raise ConfigError(f"No trained {role} classifier in {path}: run `make train-{role}`")
+        command = f"make train-{role.replace('_', '-')}"
+        raise ConfigError(f"No trained {role} classifier in {path}: run `{command}`")
     started = time.perf_counter()
     model = SetFitModel(
         model_body=SentenceTransformer(str(path), device=device()),
@@ -333,3 +336,24 @@ def classify(role: str, texts: list[str]) -> list[str]:
     labels = [str(label) for label in load_setfit(role).predict(texts)]
     _log_call(f"setfit:{role}", started, items=len(texts))
     return labels
+
+
+def setfit_examples(role: str) -> tuple[list[str], list[str]]:
+    """(texts, labels) from config/<role>.yaml, whose top-level keys are the labels."""
+    data = yaml.safe_load((CONFIG_DIR / f"{role}.yaml").read_text())
+    pairs = [(text, label) for label, texts in data.items() for text in texts]
+    return [text for text, _ in pairs], [label for _, label in pairs]
+
+
+def train_setfit_held_out(role: str) -> float:
+    """Train on a stratified 80% of config/<role>.yaml, save; return accuracy on the other 20%."""
+    from sklearn.model_selection import train_test_split
+
+    texts, labels = setfit_examples(role)
+    x_train, x_test, y_train, y_test = train_test_split(
+        texts, labels, test_size=0.2, stratify=labels, random_state=42
+    )
+    train_setfit(role, x_train, y_train)
+    hits = sum(p == y for p, y in zip(classify(role, x_test), y_test, strict=True))
+    log.info("setfit:%s trained on %d, %d/%d held-out right", role, len(x_train), hits, len(y_test))
+    return hits / len(y_test)
