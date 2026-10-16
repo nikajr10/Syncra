@@ -10,6 +10,7 @@ from app.db.schema import Item
 from app.learning.decisions import FoundDecision, read_decision
 from app.learning.entities import FoundEntity
 from app.models.gateway import OllamaClient, OllamaError
+from tests.fakes import fake_ollama
 
 THREAD = Item(
     id=1,
@@ -27,20 +28,8 @@ GOOD = {
 NOTHING = json.dumps({"decision": "", "reason": "", "people": []})
 
 
-def _ollama(*replies: str) -> tuple[OllamaClient, list[dict]]:
-    """A client whose Ollama answers `replies` in turn; returns it and the requests it got."""
-    requests: list[dict] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        requests.append(json.loads(request.content))
-        return httpx.Response(200, json={"response": replies[len(requests) - 1], "done": True})
-
-    client = OllamaClient(base_url="http://ollama.test", transport=httpx.MockTransport(handler))
-    return client, requests
-
-
 def test_good_json_is_the_decision() -> None:
-    client, requests = _ollama(json.dumps(GOOD))
+    client, requests = fake_ollama(json.dumps(GOOD))
     found = read_decision([THREAD], [FoundEntity("RabbitMQ", "tool", 0.9)], client)
 
     assert found == FoundDecision(**GOOD)
@@ -53,26 +42,26 @@ def test_good_json_is_the_decision() -> None:
 
 
 def test_bad_json_is_retried_once() -> None:
-    client, requests = _ollama('{"decision": "Put a RabbitMQ', json.dumps(GOOD))
+    client, requests = fake_ollama('{"decision": "Put a RabbitMQ', json.dumps(GOOD))
     assert read_decision([THREAD], client=client) == FoundDecision(**GOOD)
     assert len(requests) == 2
 
 
 def test_bad_output_twice_is_dropped(caplog: pytest.LogCaptureFixture) -> None:
-    client, requests = _ollama("no json here", json.dumps({"decision": "a queue"}))
+    client, requests = fake_ollama("no json here", json.dumps({"decision": "a queue"}))
     assert read_decision([THREAD], client=client) is None
     assert len(requests) == 2
     assert "dropped item 1 after 2 bad outputs" in caplog.text
 
 
 def test_no_decision() -> None:
-    client, requests = _ollama(NOTHING)
+    client, requests = fake_ollama(NOTHING)
     assert read_decision([THREAD], client=client) is None
     assert len(requests) == 1
 
 
 def test_short_conversations_and_lone_replies_are_skipped() -> None:
-    client, requests = _ollama()
+    client, requests = fake_ollama()
     assert read_decision([Item(id=2, type="message", text="ok, merging")], client=client) is None
     reply = Item(id=3, type="comment", author="github:bob", text=THREAD.text)
     assert read_decision([reply], client=client) is None  # read with its PR / issue instead
@@ -90,7 +79,7 @@ def test_a_pr_is_read_with_its_review_and_only_its_authors_are_people() -> None:
     review = Item(id=5, type="review", author="github:tom", text="approved: LGTM")
     people = ["github:maria", "github:alice", "github:tom", "github:maria"]
     answer = {"decision": "Move billing-api to gRPC", "reason": "p99 drops 40%", "people": people}
-    client, requests = _ollama(json.dumps(answer))
+    client, requests = fake_ollama(json.dumps(answer))
 
     found = read_decision([pr, review], client=client)
 
@@ -106,7 +95,7 @@ def test_long_conversations_keep_their_start_and_end(monkeypatch: pytest.MonkeyP
     monkeypatch.setattr(get_settings(), "decision_max_chars", 300)
     lines = [f"slack:U0{n % 3}: message {n} about the ledger migration" for n in range(40)]
     long = Item(id=6, type="thread", author="slack:U00", text="\n".join(lines))
-    client, requests = _ollama(NOTHING)
+    client, requests = fake_ollama(NOTHING)
 
     read_decision([long], client=client)
 

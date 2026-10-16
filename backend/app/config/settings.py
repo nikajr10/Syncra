@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, ValidationError
@@ -68,6 +68,10 @@ class Settings(BaseSettings):
     decision_min_chars: int = 60
     decision_max_chars: int = 6000
 
+    # --- question rewriter, in characters: only the newest part of the chat history is sent
+    #     (qwen3:4b runs with 4096 tokens of context in Ollama) ---
+    rewriter_max_chars: int = 4000
+
     # --- login: a bearer token stops working this many hours after it was handed out ---
     token_ttl_hours: int = 12
 
@@ -85,6 +89,7 @@ class ModelSpec(BaseModel):
     labels: list[str] = []  # GLiNER: entity types to look for
     threshold: float = 0.5  # GLiNER: drop hits scoring lower; entity_linker: merge names this alike
     prompt: str | None = None  # Ollama: config/prompts/<prompt>.yaml, versioned by name (".v1")
+    options: dict[str, Any] = {}  # Ollama: sent with every call for the role, e.g. temperature
 
 
 class ModelsConfig(BaseModel):

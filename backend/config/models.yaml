@@ -1,6 +1,7 @@
 # Every model Syncra uses, by role (see description.md §8).
 #
-#   runtime: ollama      -> name is the Ollama tag ("qwen3:8b"); pulled by scripts/pull_ollama_models.py
+#   runtime: ollama      -> name is the Ollama tag ("qwen3:8b"); pulled by scripts/pull_ollama_models.py;
+#                           optional prompt (config/prompts/<prompt>.yaml) and options (sent with each call)
 #   runtime: huggingface -> name is the Hugging Face repo id; revision pins the exact commit (supply chain:
 #                           a pushed change to the repo can't silently swap the weights);
 #                           downloaded by scripts/download_hf_models.py
@@ -49,6 +50,8 @@ models:
   question_rewriter: # Qwen3 4B: follow-up -> standalone question
     runtime: ollama
     name: qwen3:4b
+    prompt: question_rewriter.v1  # config/prompts/question_rewriter.v1.yaml
+    options: {temperature: 0}  # the same follow-up always gets the same rewrite
   prompt_guard: # Meta Prompt Guard 2 (gated: needs HF_TOKEN + accepted licence)
     runtime: huggingface
     name: meta-llama/Llama-Prompt-Guard-2-86M

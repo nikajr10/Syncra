@@ -66,8 +66,9 @@ class OllamaClient:
         think: bool,
         stream: bool,
     ) -> dict[str, Any]:
+        spec = get_models_config()[role]
         body: dict[str, Any] = {
-            "model": get_models_config()[role].name,
+            "model": spec.name,
             "prompt": prompt,
             "stream": stream,
             "think": think,  # Qwen3 "thinking" off by default: faster, and JSON stays clean
@@ -76,6 +77,7 @@ class OllamaClient:
             body["system"] = system
         if json_mode:
             body["format"] = json_mode if isinstance(json_mode, dict) else "json"
+        options = {**spec.options, **(options or {})}  # the role's options from models.yaml
         if options:
             body["options"] = options
         return body

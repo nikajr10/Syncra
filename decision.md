@@ -384,6 +384,14 @@ Code-level details are in [`progress.md`](progress.md), and how the parts work t
 
 **The chat list shows the most recently used chat first.** Saving a message marks its chat as used.
 
+**The question rewriter answers in a fixed JSON shape, at temperature 0.** With Ollama's plain JSON mode, qwen3:4b often answered with a different shape (it echoed the history back); with the exact shape it was right on every smoke test. At its default randomness it sometimes reworded the same follow-up differently and once garbled a word ("didn't" became "didn:"); at temperature 0 the answers were stable. The temperature lives in `models.yaml` as an `options` entry of the role, which any Ollama role can now use.
+
+**Only the newest 4000 characters of the chat go to the rewriter** (`REWRITER_MAX_CHARS`). Ollama gives qwen3:4b a 4096-token window, and ten turns of long answers would not fit; the last turns are what a follow-up refers to.
+
+**If the rewriter fails, the message is used as it is**, with a warning in the log. The user is waiting, so there is no retry, and searching for "who reviewed it?" literally is better than an error. The decision reader is different: it runs in the background, so it retries or waits for the next run.
+
+**The chat history is quoted data for the rewriter**, between tags it can't close, like the decision reader's threads. An answer in the history may quote a planted Slack message, and the rewriter must not follow it.
+
 ---
 
 ## 22. Chat-side models (picked, not built yet)

@@ -190,7 +190,7 @@ None of this is built yet. It's how the design in `description.md` will use what
 
 1. **Who's asking** (built). The user logs in with a token, and the GitHub, Jira and Slack accounts an admin linked to them decide what they may see (5.1).
 2. **Memory** (built). The last 10 turns of the chat are loaded from `chat_messages`, oldest first. A turn is one user message and the replies after it (5.2).
-3. **Rewrite.** If there is history, qwen3:4b turns a follow-up like "who built it?" into a standalone question like "who built the payment service?" (5.3).
+3. **Rewrite** (built). If there is history, qwen3:4b turns a follow-up like "who reviewed it?" into a standalone question like "Who reviewed the payment service?" (5.3). It sees the newest 4000 characters of the chat as quoted data and answers in JSON, at temperature 0 so the same follow-up always gets the same rewrite. A first message skips the model, and if the model fails the message is used as it is.
 4. **Safety.** Prompt Guard 2 blocks prompt-injection and jailbreak attempts with a polite reply (5.4).
 5. **Intent.** A second SetFit classifier picks the path. Small talk gets an instant reply with no search, a request to *do* something goes to an approval card, and a question carries on (5.5).
 6. **Search.** Three searches run at the same time, and each only looks at items whose access tags the user has; that filter sits inside the query itself (6.1). Vector search embeds the question with the same Qwen3-Embedding model and finds the closest chunks (6.2). Keyword search matches exact terms like `PAY-1234` (6.3). Graph search finds the entities named in the question through their aliases and follows links to related decisions and chunks (6.4).
@@ -232,4 +232,4 @@ All paths are under `backend/`.
 - Settings: `app/config/settings.py`, reading `.env`
 - Tables: `app/db/schema.py`, created by the files in `migrations/versions/`
 - The API: `app/api/main.py`; users, logins and linked accounts: `app/api/auth.py` (the admin commands are `scripts/users.py`); chats: `app/api/chat.py`
-- Chat memory: `app/chat/memory.py`
+- Chat memory: `app/chat/memory.py`; the question rewriter: `app/chat/rewrite.py`, with its prompt in `config/prompts/question_rewriter.v1.yaml`

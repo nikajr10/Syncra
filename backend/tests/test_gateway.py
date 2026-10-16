@@ -41,6 +41,20 @@ def test_generate_sends_role_model_and_logs(caplog: pytest.LogCaptureFixture) ->
     assert "model=qwen3:8b" in caplog.text and "tokens=5" in caplog.text
 
 
+def test_role_options_from_config_are_sent_and_calls_can_override_them() -> None:
+    sent: list = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        sent.append(json.loads(request.content).get("options"))
+        return httpx.Response(200, json={"response": "ok", "done": True})
+
+    client = _client(handler)
+    client.generate("question_rewriter", "q")  # options: {temperature: 0} in models.yaml
+    client.generate("question_rewriter", "q", options={"temperature": 0.7, "num_predict": 9})
+    client.generate("answer_writer", "q")  # no options configured
+    assert sent == [{"temperature": 0}, {"temperature": 0.7, "num_predict": 9}, None]
+
+
 def test_generate_json_uses_json_mode_and_parses() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         assert json.loads(request.content)["format"] == "json"

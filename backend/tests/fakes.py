@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 
+import httpx
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -12,6 +14,7 @@ from app.api.auth import add_user
 from app.api.main import app
 from app.db.schema import Chunk, Decision, Edge, Entity, Item
 from app.learning.connectors.base import RawItem
+from app.models.gateway import OllamaClient
 
 api = TestClient(app)
 
@@ -21,6 +24,18 @@ def login_as(session: Session, username: str) -> dict[str, str]:
     add_user(session, username, "correct horse")
     response = api.post("/auth/login", json={"username": username, "password": "correct horse"})
     return {"Authorization": f"Bearer {response.json()['token']}"}
+
+
+def fake_ollama(*replies: str) -> tuple[OllamaClient, list[dict]]:
+    """A client whose Ollama answers `replies` in turn; returns it and the requests it got."""
+    requests: list[dict] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(json.loads(request.content))
+        return httpx.Response(200, json={"response": replies[len(requests) - 1], "done": True})
+
+    client = OllamaClient(base_url="http://ollama.test", transport=httpx.MockTransport(handler))
+    return client, requests
 
 
 def item(n: int, text: str = "", **overrides: object) -> RawItem:
