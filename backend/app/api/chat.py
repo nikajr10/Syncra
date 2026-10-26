@@ -1,4 +1,4 @@
-"""Chat endpoints: a user's chats and their messages (Task 5.2), and sending one (Task 5.6).
+"""Chat endpoints: a user's chats and their messages (Task 5.2), and sending one (Tasks 5.6, 7.5).
 
 Every endpoint needs a login, and a user only ever sees their own chats: someone else's chat
 answers 404, exactly like a chat that doesn't exist.
@@ -6,11 +6,14 @@ answers 404, exactly like a chat that doesn't exist.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+import json
+from collections.abc import Iterator, Sequence
+from dataclasses import asdict
 from datetime import datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -18,6 +21,7 @@ from sqlalchemy.orm import Session
 from app.api.auth import DB, UNAUTHORIZED, CurrentUser
 from app.chat import pipeline
 from app.config.settings import get_settings
+from app.db.engine import new_session
 from app.db.schema import ChatMessage, ChatSession, User
 
 router = APIRouter(prefix="/chat", tags=["Chat"], responses=UNAUTHORIZED)
@@ -111,7 +115,53 @@ def send(
     models: Annotated[dict[str, Any], Depends(chat_models)],
 ) -> pipeline.Reply:
     """Reply to one message and save the turn. `path` says how it was handled: `small_talk`
-    (an instant reply), `question` or `action`, or `blocked` (a prompt attack, not saved).
+    (an instant reply), `question` (an answer citing its `sources` as [E1]…, with a
+    `confidence` and `follow_ups`) or `action`, or `blocked` (a prompt attack, not saved).
     `question` is the message rewritten to stand on its own."""
     chat = own_chat(session, user, chat_id)
     return pipeline.reply(session, chat, body.message, **models)
+
+
+STREAM_DOC = {
+    200: {
+        "description": "Server-Sent Events: `token` events (`{\"text\": …}`) while the answer is "
+        "written, then one `done` event with the reply, as from *Send a message*.",
+        "content": {"text/event-stream": {"example": 'event: token\ndata: {"text": "Alice"}\n\n'
+                                          'event: done\ndata: {"path": "question", …}\n\n'}},
+    },
+    **NOT_FOUND,
+}  # fmt: skip
+
+
+def _event(name: str, data: object) -> str:
+    return f"event: {name}\ndata: {json.dumps(data)}\n\n"
+
+
+@router.post(
+    "/sessions/{chat_id}/messages/stream",
+    summary="Send a message, streamed",
+    response_class=StreamingResponse,
+    responses=STREAM_DOC,
+)
+def send_streamed(
+    chat_id: int,
+    body: NewMessage,
+    user: CurrentUser,
+    session: DB,
+    models: Annotated[dict[str, Any], Depends(chat_models)],
+) -> StreamingResponse:
+    """Like *Send a message*, but the answer arrives word by word as Server-Sent Events. The
+    streamed words are the draft; the `done` event carries the checked reply that was saved."""
+    own_chat(session, user, chat_id)  # 404 before the stream starts
+
+    def events() -> Iterator[str]:
+        with new_session() as stream_session:  # the request's session may close first
+            chat = stream_session.get(ChatSession, chat_id)
+            for event in pipeline.stream(stream_session, chat, body.message, **models):
+                if isinstance(event, str):
+                    yield _event("token", {"text": event})
+                else:
+                    yield _event("done", asdict(event))
+
+    headers = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+    return StreamingResponse(events(), media_type="text/event-stream", headers=headers)

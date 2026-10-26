@@ -490,7 +490,7 @@ flowchart LR
 - [x] 7.2 Answer writer step (streaming)
 - [x] 7.3 Claim checker (DeBERTa NLI)
 - [x] 7.4 Confidence score
-- [ ] 7.5 Full chat reply
+- [x] 7.5 Full chat reply
 
 **Phase 8 — Actions**
 - [ ] 8.1 Action planner

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import UTC, datetime
 
 import httpx
@@ -27,12 +28,18 @@ def login_as(session: Session, username: str) -> dict[str, str]:
 
 
 def fake_ollama(*replies: str) -> tuple[OllamaClient, list[dict]]:
-    """A client whose Ollama answers `replies` in turn; returns it and the requests it got."""
+    """A client whose Ollama answers `replies` in turn (word by word when streaming); returns it
+    and the requests it got."""
     requests: list[dict] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
         requests.append(json.loads(request.content))
-        return httpx.Response(200, json={"response": replies[len(requests) - 1], "done": True})
+        reply = replies[len(requests) - 1]
+        if requests[-1]["stream"]:  # streamed word by word
+            lines = [{"response": w, "done": False} for w in re.findall(r"\S+\s*", reply)]
+            lines.append({"response": "", "done": True})
+            return httpx.Response(200, content="\n".join(json.dumps(line) for line in lines))
+        return httpx.Response(200, json={"response": reply, "done": True})
 
     client = OllamaClient(base_url="http://ollama.test", transport=httpx.MockTransport(handler))
     return client, requests

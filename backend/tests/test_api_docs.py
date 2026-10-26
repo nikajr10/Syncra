@@ -16,7 +16,9 @@ def test_every_endpoint_is_documented() -> None:
             where = (method, path)
             assert operation["tags"] and set(operation["tags"]) <= tags, where
             [(code, ok)] = [(c, r) for c, r in operation["responses"].items() if c[0] == "2"]
-            if code != "204":  # a body: described by a named model, not a bare dict
+            if "text/event-stream" in ok.get("content", {}):  # a stream: described in words
+                assert ok["description"], where
+            elif code != "204":  # a body: described by a named model, not a bare dict
                 assert "$ref" in json.dumps(ok["content"]["application/json"]["schema"]), where
             if path not in PUBLIC:  # the lock icon and the 401 are on the page
                 assert operation["security"] == [{"HTTPBearer": []}], where
