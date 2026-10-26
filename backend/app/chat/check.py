@@ -6,16 +6,19 @@ the premise and the claim as the hypothesis; the claim is supported when one of 
 with at least the role's `threshold`. A claim citing nothing is checked against all evidence and
 gets the citation of the piece that supports it. Unsupported claims are removed. Sentences
 that only say what isn't known ("I don't know …") make no claim and stay.
+
+`confidence` (Task 7.4) labels the checked answer high, medium or low.
 """
 
 from __future__ import annotations
 
+import math
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 
 from app.chat.search import Evidence
-from app.config.settings import get_models_config
+from app.config.settings import get_models_config, get_settings
 from app.models import gateway
 
 CITATION = re.compile(r"\[(E\d+(?:\s*,\s*E\d+)*)\]")
@@ -99,3 +102,25 @@ def check(answer: str, evidence: Sequence[Evidence]) -> Checked:
 def _cite(sentence: str, label: str) -> str:
     end = len(sentence.rstrip(".!?"))
     return f"{sentence[:end]} [{label}]{sentence[end:]}"
+
+
+def confidence(checked: Checked, evidence: Sequence[Evidence]) -> str:
+    """high | medium | low: how much of the answer the evidence backs, times how relevant the
+    evidence it cites is.
+
+    support = supported claims / checked claims (hedges don't count); relevance = the
+    reranker's best score among the cited evidence, squashed to 0–1 (sigmoid). No supported
+    claim (an "I don't know", or everything removed) is always low.
+    """
+    checked_claims = [c for c in checked.claims if c.supported is not None]
+    supported = [c for c in checked_claims if c.supported]
+    if not supported:
+        return "low"
+    cited = {label for c in supported for label in c.cited}
+    best = max((e.score for e in evidence if e.label in cited), default=-math.inf)
+    relevance = 1 / (1 + math.exp(-best)) if best > -math.inf else 0.0
+    score = len(supported) / len(checked_claims) * relevance
+    settings = get_settings()
+    if score >= settings.confidence_high:
+        return "high"
+    return "medium" if score >= settings.confidence_medium else "low"

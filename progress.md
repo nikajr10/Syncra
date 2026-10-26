@@ -5,10 +5,30 @@ Live record of what has been built. Agents add an entry here after every task (f
 ## Current status
 
 - **Current phase:** Phase 7 — Write and check answers
-- **Next task:** 7.4 — Confidence score
-- **Completed tasks:** 0.1–0.6, 1.1–1.6, 2.1–2.3, 3.1–3.4, 4.1–4.4, 5.1–5.3, 5.5, 5.6, 6.1–6.5, 7.1–7.3 (5.4 real model waits for HF_TOKEN)
+- **Next task:** 7.5 — Full chat reply
+- **Completed tasks:** 0.1–0.6, 1.1–1.6, 2.1–2.3, 3.1–3.4, 4.1–4.4, 5.1–5.3, 5.5, 5.6, 6.1–6.5, 7.1–7.4 (5.4 real model waits for HF_TOKEN)
 
 ## Log
+
+### Task 7.4 — Confidence score  ✅ done
+**Date:** 2026-10-26
+
+**Built**
+- `check.confidence(checked, evidence) -> "high" | "medium" | "low"`: support (supported claims / checked claims, hedges not counted) × relevance (the reranker's best score among the evidence the supported claims cite, through a sigmoid to 0–1). At least `CONFIDENCE_HIGH` (0.7) is high, at least `CONFIDENCE_MEDIUM` (0.4) medium, otherwise low. No supported claim (an "I don't know", or everything removed) is always low.
+- Tests cover all three levels: fully backed and relevant (high), one of three claims removed (medium), backed but barely relevant evidence (low), mostly removed (low), "I don't know" (low), nothing at all (low).
+
+**Key files**
+- `backend/app/chat/check.py`, `backend/app/config/settings.py`, `backend/tests/test_answer.py`
+
+**Decisions**
+- A product, not an average: an answer is only as trustworthy as its weakest side. Fully supported claims from barely relevant evidence (a reranker score near 0) are medium at best; relevant evidence with half the claims removed is low.
+- The reranker's raw scores (logits) go through a sigmoid so the thresholds read as 0–1.
+
+**How to run / test**
+- `make test`
+
+**Known issues / TODO**
+- The thresholds are a first guess; tune them on the evaluation set (Task 10.2).
 
 ### Task 7.3 — Claim checker (DeBERTa NLI)  ✅ done
 **Date:** 2026-10-26

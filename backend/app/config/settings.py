@@ -82,6 +82,12 @@ class Settings(BaseSettings):
     # --- answer writer, in characters: only the newest part of the chat history is sent ---
     answer_history_max_chars: int = 2000
 
+    # --- confidence: support (share of claims the evidence backs) x relevance (the reranker's
+    #     best score for the cited evidence, squashed to 0-1); at least high -> "high", at least
+    #     medium -> "medium", otherwise "low" ---
+    confidence_high: float = 0.7
+    confidence_medium: float = 0.4
+
     # --- login: a bearer token stops working this many hours after it was handed out ---
     token_ttl_hours: int = 12
 

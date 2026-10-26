@@ -1,10 +1,11 @@
 """Phase 7: the answer writer's prompt, streamed cited answers, claim checks and confidence."""
 
+from dataclasses import replace
 from datetime import UTC, datetime
 from string import Template
 
 from app.chat.answer import split, write
-from app.chat.check import check
+from app.chat.check import Checked, Claim, check, confidence
 from app.chat.search import Evidence
 from app.config.settings import get_models_config, get_prompt
 from app.db.schema import ChatMessage
@@ -96,3 +97,19 @@ def test_a_made_up_claim_is_removed() -> None:
 def test_a_claim_citing_missing_evidence_is_removed() -> None:
     checked = check("github:alice built the payment queue [E7].", EVIDENCE[:1])
     assert checked.text == "" and len(checked.removed) == 1
+
+
+def _claims(*supported: bool | None) -> Checked:
+    return Checked("", [Claim("x", ("E1",), s, 0.9) for s in supported])
+
+
+def test_confidence_levels() -> None:
+    relevant = [replace(EVIDENCE[0], score=4.0)]  # sigmoid 0.98
+    weak = [replace(EVIDENCE[0], score=-0.5)]  # sigmoid 0.38
+
+    assert confidence(_claims(True, True, None), relevant) == "high"
+    assert confidence(_claims(True, True, False), relevant) == "medium"  # 0.67 * 0.98
+    assert confidence(_claims(True, True), weak) == "low"  # backed, but barely relevant
+    assert confidence(_claims(True, False, False, False), relevant) == "low"  # 0.25
+    assert confidence(_claims(None), relevant) == "low"  # "I don't know"
+    assert confidence(_claims(), []) == "low"
