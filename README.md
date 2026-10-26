@@ -44,7 +44,7 @@ npm install       # once, and again when package.json changes
 npm run dev       # http://localhost:5173
 ```
 
-Log in with a user from `make add-user`. Everyone gets their chats (streamed answers, numbered citations that preview their source, confidence, follow-ups) and an Approvals page for action cards. Admins also get Sources, People and Activity in the sidebar. ⌘K searches chats and pages.
+Log in with a user from `make add-user`. An empty chat suggests questions about the newest decisions and tickets that user can see. Everyone gets their chats (streamed answers, numbered citations that preview their source, confidence, follow-ups) and an Approvals page for action cards. Admins also get Sources, People and Activity in the sidebar. ⌘K searches chats and pages.
 
 The app calls the API under `/api`, and Vite passes those calls to `http://127.0.0.1:8000`, so the API needs no CORS setting. `npm run build` writes the production files to `frontend/dist`; `npm run preview` serves them with the same pass-through.
 

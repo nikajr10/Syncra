@@ -31,6 +31,7 @@ export interface SourceView {
 export interface UserView { username: string; display_name: string | null; is_admin: boolean; accounts: Account[] }
 export interface EventView { kind: string; message: string; details: Record<string, unknown>; created_at: string }
 export interface Status { items: Record<string, number>; sources: SourceView[]; events: EventView[] }
+export interface Suggestions { questions: string[]; ticket_project: string | null }
 
 const TOKEN = 'syncra-token'
 
@@ -77,6 +78,7 @@ export const api = {
   chats: () => json<Chat[]>('GET', '/chat/sessions'),
   newChat: (title: string) => json<Chat>('POST', '/chat/sessions', { title }),
   messages: (id: number) => json<Message[]>('GET', `/chat/sessions/${id}/messages`),
+  suggestions: () => json<Suggestions>('GET', '/chat/suggestions'),
   actions: () => json<Card[]>('GET', '/actions'),
   approve: (id: number) => json<Card>('POST', `/actions/${id}/approve`),
   reject: (id: number) => json<Card>('POST', `/actions/${id}/reject`),

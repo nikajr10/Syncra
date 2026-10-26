@@ -506,6 +506,8 @@ Code-level details are in [`progress.md`](progress.md), and how the parts work t
 
 **The login token sits in the browser's local storage.** The API hands out bearer tokens, so that was the simple fit. A script injected into the page could read it; React never renders the tools' text as HTML and only `http(s)` links become clickable, which closes the usual way in. An httpOnly cookie would be stronger and needs API changes.
 
+**Starter questions come from the user's own data, not a fixed list.** `GET /chat/suggestions` turns the newest decisions in tickets and PRs into "What did we decide about "…"?" questions, quoting the title. A template that rewrote titles as "Why did we decide to …" read badly for titles that name a thing ("Retry policy for merchant webhooks"), so the title stays as written. No LLM: it must be instant and can't leak what the permission filter hides.
+
 **Two small API additions.** `GET /me` now says `is_admin`, so the app knows whether to show admin pages, and action cards carry their `session_id`, so a card shows up under its reply again after a reload.
 
 **Hugging Face models run one call at a time.** Testing the app found that the API process crashed when the first question arrived while warm-up was still loading models, and the same happens with two questions at once: two models on Apple's GPU together trip a Metal assertion. A single lock in the model gateway fixed both; Ollama calls are not affected.

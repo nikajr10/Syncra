@@ -32,6 +32,22 @@
   cursor: pointer;
   transition: border-color var(--duration-fast) var(--ease-standard), background-color var(--duration-fast) var(--ease-standard), transform var(--duration-spring) var(--ease-spring);
 }
+.starter { animation: rise var(--duration-considered) var(--ease-enter) both; }
+.starter > span { display: flex; flex-direction: column; gap: 2px; }
+.starterNote { color: var(--text-secondary); font-size: var(--text-xs); }
+.starterSkeleton {
+  height: 74px;
+  border-radius: calc(var(--radius-control) - 2px);
+  background: linear-gradient(90deg, var(--surface-muted) 30%, var(--border-subtle) 50%, var(--surface-muted) 70%) 0 0 / 300% 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+@keyframes shimmer { to { background-position: -150% 0; } }
+.noSuggestions { margin-top: var(--space-6); max-width: 56ch; padding: var(--space-4); border: 1px dashed var(--border-strong); border-radius: calc(var(--radius-control) - 2px); color: var(--text-secondary); }
+
+/* New turns rise into place; saved history appears as it is. */
+[data-new] { animation: rise var(--duration-standard) var(--ease-enter) both; }
+@keyframes rise { from { opacity: 0; transform: translateY(6px); } }
+
 .starter svg { flex-shrink: 0; color: var(--text-muted); transition: color var(--duration-fast) var(--ease-standard), transform var(--duration-standard) var(--ease-enter); }
 .starter:active { transform: scale(.985); transition-duration: var(--duration-instant); }
 @media (hover: hover) and (pointer: fine) {
@@ -227,6 +243,6 @@ a.source:hover { background: var(--surface-muted); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .prose[data-streaming]::after { animation: none; }
+  .prose[data-streaming]::after, [data-new], .starter, .starterSkeleton { animation: none; }
   .starter, .starter svg, .send, .cite { transition: none; }
 }

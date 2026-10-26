@@ -57,7 +57,15 @@ function Shell({ me, onSignOut }: { me: Me; onSignOut: () => Promise<void> }) {
 
   const loadChats = useCallback(() => api.chats().then(setChats, () => {}), [])
   const loadActions = useCallback(() => api.actions().then(setActions, () => {}), [])
-  useEffect(() => { loadChats(); loadActions() }, [loadChats, loadActions])
+  useEffect(() => {
+    // Live: approvals and chats from other tabs or devices show up without a reload.
+    const refresh = () => { if (document.visibilityState === 'visible') { loadChats(); loadActions() } }
+    refresh()
+    const timer = setInterval(refresh, 30_000)
+    addEventListener('focus', refresh)
+    document.addEventListener('visibilitychange', refresh)
+    return () => { clearInterval(timer); removeEventListener('focus', refresh); document.removeEventListener('visibilitychange', refresh) }
+  }, [loadChats, loadActions])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

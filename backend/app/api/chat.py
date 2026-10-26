@@ -7,6 +7,7 @@ answers 404, exactly like a chat that doesn't exist.
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Iterator, Sequence
 from dataclasses import asdict
 from datetime import datetime
@@ -20,9 +21,11 @@ from sqlalchemy.orm import Session
 
 from app.api.auth import DB, UNAUTHORIZED, CurrentUser
 from app.chat import pipeline
+from app.chat.actions import jira_projects
+from app.chat.permissions import user_tags, visible
 from app.config.settings import get_settings
 from app.db.engine import new_session
-from app.db.schema import ChatMessage, ChatSession, User
+from app.db.schema import ChatMessage, ChatSession, Decision, Item, User
 
 router = APIRouter(prefix="/chat", tags=["Chat"], responses=UNAUTHORIZED)
 NOT_FOUND = {404: {"description": "Not one of your chats"}}
@@ -72,6 +75,64 @@ def own_chat(session: Session, user: User, chat_id: int) -> ChatSession:
     if chat is None:
         raise HTTPException(404, "Chat not found")
     return chat
+
+
+class Suggestions(BaseModel):
+    questions: list[str] = Field(
+        description="Questions about recent decisions and tickets you can see",
+        examples=[
+            ['What did we decide about "Rate limit the public API"?', "What does PAY-160 say?"]
+        ],
+    )
+    ticket_project: str | None = Field(
+        description="A Jira project you may open tickets in, to offer an action", examples=["PAY"]
+    )
+
+
+JIRA_KEY = re.compile(r"[A-Z][A-Z0-9]+-\d+")
+WHY_QUESTIONS = 3
+
+
+def _words(title: str) -> set[str]:
+    return {w for w in re.findall(r"[a-z0-9-]+", title.lower()) if len(w) > 2}
+
+
+def same_topic(a: str, b: str) -> bool:
+    """A ticket and the PR that closes it share most of their words."""
+    wa, wb = _words(a), _words(b)
+    return bool(wa and wb) and len(wa & wb) / min(len(wa), len(wb)) >= 0.6
+
+
+@router.get("/suggestions", summary="Questions to start with")
+def suggestions(user: CurrentUser, session: DB) -> Suggestions:
+    """A few questions built from the newest decisions in tickets and PRs the user may see, and
+    the newest Jira ticket on another topic; no model is involved. Empty when they see nothing.
+    Titles are quoted as they are: some name a change ("Rate limit …"), some a thing."""
+    tags = user_tags(session, user.id)
+    titles = session.scalars(
+        select(Item.title)
+        .join(Decision, Decision.item_id == Item.id)
+        .where(visible(tags), Item.type.in_(["pr", "issue"]), Item.title.is_not(None))
+        .order_by(Decision.decided_at.desc().nulls_last(), Decision.id.desc())
+        .limit(30)
+    )
+    topics: list[str] = []
+    for title in titles:
+        if len(topics) < WHY_QUESTIONS and not any(same_topic(title, t) for t in topics):
+            topics.append(title.strip().rstrip("."))
+    questions = [f'What did we decide about "{t}"?' for t in topics]
+    tickets = session.execute(
+        select(Item.external_id, Item.title)
+        .where(visible(tags), Item.type == "issue")
+        .order_by(Item.created_at.desc(), Item.id.desc())
+        .limit(30)
+    )
+    for key, title in tickets:
+        if JIRA_KEY.fullmatch(key) and not any(same_topic(title or "", t) for t in topics):
+            questions.append(f"What does {key} say?")
+            break
+    projects = jira_projects(session, user.id)
+    return Suggestions(questions=questions, ticket_project=next(iter(projects), None))
 
 
 @router.post("/sessions", status_code=201, response_model=Chat, summary="Start a chat")

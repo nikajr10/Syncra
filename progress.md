@@ -10,6 +10,29 @@ Live record of what has been built. Agents add an entry here after every task (f
 
 ## Log
 
+### Task 9.2 follow-up — A dynamic web app  ✅ done
+**Date:** 2026-10-26
+
+**Built**
+- `GET /chat/suggestions` (`app/api/chat.py`): starter questions from the newest decisions in tickets and PRs the user may see, the newest Jira ticket on another topic, and the Jira project they may open tickets in. Permission-filtered SQL, no model.
+- The web app shows those instead of the old hardcoded demo questions; a "ticket" starter fills in "Open a Jira ticket in PAY to " for the user to finish. With nothing to suggest it says why (no linked accounts or nothing learned yet).
+- The chat list and approvals refresh every 30 s while the tab is visible and on focus, so a card approved elsewhere updates without a reload.
+- New messages and starters rise into place; saved history doesn't animate, and reduced motion turns it all off.
+
+**Key files**
+- `backend/app/api/chat.py` (`suggestions`, `same_topic`), `backend/tests/test_suggestions.py`
+- `frontend/src/Chat.tsx` (`Starters`, composer draft), `frontend/src/App.tsx` (live refresh)
+
+**Decisions**
+- Questions quote the title (`What did we decide about "…"?`): rewriting titles as verbs broke on titles that name a thing.
+- A ticket and its PR are one topic when most of their words match (`same_topic`).
+
+**How to run / test**
+- `make test` in `backend/`; `npm test` and `npm run build` in `frontend/`.
+
+**Known issues / TODO**
+- Suggestions are only as good as the titles; a source with no decisions yet gives none.
+
 ### Task 9.1–9.4 — Web app  ✅ done
 **Date:** 2026-10-26
 

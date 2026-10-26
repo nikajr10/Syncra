@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
-import { ArrowUp, ArrowUpRight, ShieldAlert } from 'lucide-react'
-import { api, streamMessage, type Card, type Chat, type Confidence, type Message, type Reply, type Source } from '@/api'
+import { ArrowUp, ArrowUpRight, PenLine, ShieldAlert } from 'lucide-react'
+import { api, streamMessage, type Card, type Chat, type Confidence, type Message, type Reply, type Source, type Suggestions } from '@/api'
 import { ActionButton } from '@/components/arc/action-button/action-button'
 import { Alert } from '@/components/arc/alert/alert'
 import { Badge, type BadgeTone } from '@/components/arc/badge/badge'
@@ -27,14 +27,6 @@ interface Turn extends Partial<Omit<Message, 'role'>> {
   error?: string
 }
 
-// Questions the demo company (backend/demo) can answer; harmless elsewhere.
-const STARTERS = [
-  'Why did we pick RabbitMQ instead of Kafka?',
-  'Why are refund retries capped at 3?',
-  'What does PAY-131 say?',
-  'Open a Jira ticket to add monitoring for the payment queue',
-]
-
 interface ChatViewProps {
   chatId: number | null
   name: string
@@ -48,6 +40,8 @@ export function ChatView({ chatId, name, actions, onChatCreated, onReplied, onCa
   const [turns, setTurns] = useState<Turn[] | null>(chatId ? null : [])
   const [busy, setBusy] = useState(false)
   const [loadError, setLoadError] = useState('')
+  const [suggested, setSuggested] = useState<Suggestions | null>(null)
+  const [draft, setDraft] = useState({ text: '', n: 0 }) // a new n remounts the composer with this text
   const created = useRef<number | null>(null) // the chat this view just created: its turns are already on screen
   const scroller = useRef<HTMLDivElement>(null)
   const stuck = useRef(true) // follow new text only while the reader is at the bottom
@@ -66,6 +60,11 @@ export function ChatView({ chatId, name, actions, onChatCreated, onReplied, onCa
     )
     return () => { live = false }
   }, [chatId])
+
+  const empty = turns?.length === 0
+  useEffect(() => {
+    if (empty) api.suggestions().then(setSuggested, () => setSuggested({ questions: [], ticket_project: null }))
+  }, [empty])
 
   useEffect(() => {
     const el = scroller.current
@@ -111,7 +110,6 @@ export function ChatView({ chatId, name, actions, onChatCreated, onReplied, onCa
     return actions.find(a => a.session_id === chatId && Math.abs(new Date(a.created_at).getTime() - at) < 2000)
   }
 
-  const empty = turns?.length === 0
   const last = turns?.[turns.length - 1]
 
   return (
@@ -128,13 +126,7 @@ export function ChatView({ chatId, name, actions, onChatCreated, onReplied, onCa
             <div className={s.welcome}>
               <h1 className={s.hello}>What do you want to know, {name}?</h1>
               <p className={s.helloLead}>Ask about decisions, code, tickets or conversations. Answers cite the GitHub, Jira and Slack items they come from.</p>
-              <div className={s.starters}>
-                {STARTERS.map(q => (
-                  <button key={q} type="button" className={s.starter} onClick={() => send(q)}>
-                    <span>{q}</span><ArrowUpRight size={16} strokeWidth={1.75} aria-hidden="true" />
-                  </button>
-                ))}
-              </div>
+              <Starters suggested={suggested} onAsk={send} onDraft={text => setDraft(d => ({ text, n: d.n + 1 }))} />
             </div>
           )}
           {turns?.map((t, i) => {
@@ -142,7 +134,7 @@ export function ChatView({ chatId, name, actions, onChatCreated, onReplied, onCa
             return (
               <Fragment key={i}>
                 {t.role === 'user'
-                  ? <div className={s.user}><p>{t.content}</p></div>
+                  ? <div className={s.user} data-new={!t.created_at || undefined}><p>{t.content}</p></div>
                   : <Answer turn={t} onAsk={send} canAsk={!busy && t === last} retry={t.error && i > 0 ? () => send(turns[i - 1].content) : undefined} />}
                 {card && <ActionCard card={card} onChange={onCardChange} />}
               </Fragment>
@@ -150,7 +142,37 @@ export function ChatView({ chatId, name, actions, onChatCreated, onReplied, onCa
           })}
         </div>
       </div>
-      <Composer busy={busy} onSend={send} />
+      <Composer key={draft.n} busy={busy} onSend={send} initial={draft.text} />
+    </div>
+  )
+}
+
+/** Questions from the newest decisions and tickets this user may see (GET /chat/suggestions). */
+function Starters({ suggested, onAsk, onDraft }: { suggested: Suggestions | null; onAsk: (q: string) => void; onDraft: (text: string) => void }) {
+  if (!suggested) return (
+    <div className={s.starters} aria-busy="true" aria-label="Loading suggestions">
+      {[0, 1, 2, 3].map(i => <div key={i} className={s.starterSkeleton} />)}
+    </div>
+  )
+  const { questions, ticket_project: project } = suggested
+  if (!questions.length && !project) return (
+    <p className={s.noSuggestions}>
+      Nothing to suggest yet: Syncra hasn't learned anything you can see. Ask anyway, or ask an admin to link your GitHub, Jira and Slack accounts.
+    </p>
+  )
+  return (
+    <div className={s.starters}>
+      {questions.map((q, i) => (
+        <button key={q} type="button" className={s.starter} style={{ animationDelay: `${i * 40}ms` }} onClick={() => onAsk(q)}>
+          <span>{q}</span><ArrowUpRight size={16} strokeWidth={1.75} aria-hidden="true" />
+        </button>
+      ))}
+      {project && (
+        <button type="button" className={s.starter} style={{ animationDelay: `${questions.length * 40}ms` }} onClick={() => onDraft(`Open a Jira ticket in ${project} to `)}>
+          <span>Open a Jira ticket in {project}…<span className={s.starterNote}>You finish the sentence, then approve the card</span></span>
+          <PenLine size={16} strokeWidth={1.75} aria-hidden="true" />
+        </button>
+      )}
     </div>
   )
 }
@@ -178,12 +200,12 @@ function Answer({ turn, onAsk, canAsk, retry }: { turn: Turn; onAsk: (q: string)
     </div>
   )
   if (turn.streaming && !turn.content) return (
-    <div className={s.answer} aria-live="polite"><TextShimmer>Searching your team's memory</TextShimmer></div>
+    <div className={s.answer} aria-live="polite" data-new><TextShimmer>Searching your team's memory</TextShimmer></div>
   )
 
   const shown = allSources ? sources : sources.slice(0, 3)
   return (
-    <article className={s.answer} aria-busy={turn.streaming || undefined}>
+    <article className={s.answer} aria-busy={turn.streaming || undefined} data-new={!turn.created_at || undefined}>
       <div className={s.prose} data-streaming={turn.streaming || undefined}>
         <Cited text={turn.content} sources={sources} />
       </div>
@@ -283,9 +305,14 @@ function SourceRow({ source }: { source: Source }) {
     : <div className={s.source}>{body}</div>
 }
 
-function Composer({ busy, onSend }: { busy: boolean; onSend: (text: string) => void }) {
-  const [text, setText] = useState('')
+function Composer({ busy, onSend, initial }: { busy: boolean; onSend: (text: string) => void; initial: string }) {
+  const [text, setText] = useState(initial)
   const box = useRef<HTMLTextAreaElement>(null)
+
+  useEffect(() => {
+    const el = box.current
+    if (initial && el) { el.focus(); el.setSelectionRange(initial.length, initial.length) } // a drafted request: finish typing it
+  }, [initial])
 
   useEffect(() => {
     const el = box.current
