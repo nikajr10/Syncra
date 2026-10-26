@@ -38,6 +38,19 @@ def fake_ollama(*replies: str) -> tuple[OllamaClient, list[dict]]:
     return client, requests
 
 
+def fake_ollama_stream(*pieces: str) -> tuple[OllamaClient, list[dict]]:
+    """A client whose Ollama streams `pieces` one line each, then "done"; and the requests."""
+    requests: list[dict] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(json.loads(request.content))
+        lines = [{"response": p, "done": False} for p in pieces] + [{"response": "", "done": True}]
+        return httpx.Response(200, content="\n".join(json.dumps(line) for line in lines))
+
+    client = OllamaClient(base_url="http://ollama.test", transport=httpx.MockTransport(handler))
+    return client, requests
+
+
 def item(n: int, text: str = "", **overrides: object) -> RawItem:
     base = dict(
         external_id=str(n),

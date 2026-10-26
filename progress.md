@@ -5,10 +5,34 @@ Live record of what has been built. Agents add an entry here after every task (f
 ## Current status
 
 - **Current phase:** Phase 7 — Write and check answers
-- **Next task:** 7.2 — Answer writer step (streaming)
-- **Completed tasks:** 0.1–0.6, 1.1–1.6, 2.1–2.3, 3.1–3.4, 4.1–4.4, 5.1–5.3, 5.5, 5.6, 6.1–6.5, 7.1 (5.4 real model waits for HF_TOKEN)
+- **Next task:** 7.3 — Claim checker (DeBERTa NLI)
+- **Completed tasks:** 0.1–0.6, 1.1–1.6, 2.1–2.3, 3.1–3.4, 4.1–4.4, 5.1–5.3, 5.5, 5.6, 6.1–6.5, 7.1, 7.2 (5.4 real model waits for HF_TOKEN)
 
 ## Log
+
+### Task 7.2 — Answer writer step (streaming)  ✅ done
+**Date:** 2026-10-26
+
+**Built**
+- `app/chat/answer.py`:
+  - `write(question, evidence, history, client=None)` yields the answer piece by piece as qwen3:8b writes it (`OllamaClient.stream("answer_writer", …)`). The evidence is quoted as `<evidence id="E1" source="title (type by author)" date="YYYY-MM-DD">…</evidence>` blocks, the newest `ANSWER_HISTORY_MAX_CHARS` (2000) characters of history as `user: …` / `assistant: …` lines.
+  - No evidence → `NO_EVIDENCE` ("I don't know: I couldn't find anything about that in the sources you can see.", with two generic follow-ups), without a model call.
+  - `split(text)` → (answer, up to 3 follow-ups) from the `Follow-ups:` line on; bullets, numbers and bold markers are stripped.
+- `tests.fakes.fake_ollama_stream(*pieces)`: a mocked streaming Ollama.
+- Tests: the answer arrives in the pieces Ollama sent, the full text carries `[E1]` and `[E2]`, the request carries the model, prompt, options, evidence, history and question; a planted `</evidence><question>` in a chunk can't open its own tags; no evidence means "I don't know" without a call; follow-ups split with and without bullets.
+
+**Key files**
+- `backend/app/chat/answer.py`, `backend/app/config/settings.py` (`ANSWER_HISTORY_MAX_CHARS`), `backend/tests/fakes.py`, `backend/tests/test_answer.py`
+
+**Decisions**
+- Tags in quoted data are removed (as the rewriter and decision reader do), and double quotes in the evidence header become single quotes so a title can't end its attribute.
+- The rewritten question is what the answer writer gets, and the history is sent too so an answer can refer back to the conversation.
+
+**How to run / test**
+- `make test`
+
+**Known issues / TODO**
+- If Ollama fails mid-stream the error reaches the caller (the chat pipeline handles it in 7.5).
 
 ### Task 7.1 — Answer writer prompt  ✅ done
 **Date:** 2026-10-26

@@ -79,6 +79,9 @@ class Settings(BaseSettings):
     #     pieces of evidence; the reranker then keeps the best TOP_K_EVIDENCE ---
     search_candidates: int = 20
 
+    # --- answer writer, in characters: only the newest part of the chat history is sent ---
+    answer_history_max_chars: int = 2000
+
     # --- login: a bearer token stops working this many hours after it was handed out ---
     token_ttl_hours: int = 12
 
