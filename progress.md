@@ -5,10 +5,37 @@ Live record of what has been built. Agents add an entry here after every task (f
 ## Current status
 
 - **Current phase:** Phase 10 — Quality and launch
-- **Next task:** 10.1 — Demo data (then 10.2, 10.4–10.6)
-- **Completed tasks:** 0.1–0.6, 1.1–1.6, 2.1–2.3, 3.1–3.4, 4.1–4.4, 5.1–5.3, 5.5, 5.6, 6.1–6.5, 7.1–7.5, 8.1–8.2, 9.4 backend, 10.3 (5.4 real model waits for HF_TOKEN; 9.1–9.3 frontend kept as is)
+- **Next task:** 10.1 — Demo data, 10.2, 10.4, 10.6
+- **Completed tasks:** 0.1–0.6, 1.1–1.6, 2.1–2.3, 3.1–3.4, 4.1–4.4, 5.1–5.3, 5.5, 5.6, 6.1–6.5, 7.1–7.5, 8.1–8.2, 9.4 backend, 10.3, 10.5 (5.4 real model waits for HF_TOKEN; 9.1–9.3 frontend kept as is)
 
 ## Log
+
+### Task 10.5 — Monitoring and logs  ✅ done
+**Date:** 2026-10-26
+
+**Built**
+- Migration 0005 + `Event`: an `events` table (kind, message, details, time) both the API and the worker write to.
+- `app/monitor.py`:
+  - `record(kind, message, **details)` saves an event in its own session (it survives the caller's rollback) and never raises; events older than `EVENTS_KEEP_DAYS` (30) are deleted as new ones arrive.
+  - `setup_logging()` for the API (at startup) and the worker: Syncra's loggers at `LOG_LEVEL`, as text or one JSON object per line (`LOG_FORMAT=json`, with extra fields such as `timings`).
+  - `Timer`: seconds per stage.
+- Recorded events: `sync_failed` (scheduled and admin-started syncs), `learn_failed` (a conversation the pipeline couldn't learn), `model_error` (answer writer, action planner, question rewriter falling back), `slow_answer` (a reply slower than `SLOW_ANSWER_SECONDS`, 10, with its chat id and stage timings).
+- Every chat reply logs its stage timings: memory, guard, intent, rewrite, search, first_word, answer, check (or plan), total.
+- `GET /admin/status` (admins only): items by status, every source's last sync and error, and the latest events, newest first (`limit`, default 50).
+- Tests: a failed sync and a slow answer are both visible in `/admin/status` (with timings), and a normal user gets 403; the schema test covers `events`.
+
+**Key files**
+- `backend/app/monitor.py`, `backend/migrations/versions/0005_events.py`, `backend/app/db/schema.py`, `backend/app/api/admin.py`, `backend/app/chat/pipeline.py`, `backend/app/chat/rewrite.py`, `backend/app/learning/sync.py`, `backend/app/learning/pipeline.py`, `backend/app/api/main.py`, `backend/app/jobs/scheduler.py`, `backend/tests/test_admin.py`
+
+**Decisions**
+- Events live in Postgres, not in memory or a log file: the API and the worker are separate processes and the admin view must see both. No new service (one database rule).
+- A slow-answer event holds the chat id and timings, not the question text: the admin can find the chat, but questions don't spread into a second table.
+
+**How to run / test**
+- `make migrate` · `make test` · `/docs` → Admin → `GET /admin/status`
+
+**Known issues / TODO**
+- No alerting (email, Slack): an admin has to look. Add it when the deployment target is known.
 
 ### Task 10.3 — Permission and safety tests  ✅ done
 **Date:** 2026-10-26

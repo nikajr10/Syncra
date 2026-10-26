@@ -1,4 +1,5 @@
-"""Task 9.4 (backend): an admin adds a source and sees it sync; links accounts; others get 403."""
+"""Tasks 9.4 and 10.5 (backend): an admin adds sources, sees them sync and what went wrong,
+links accounts; everyone else gets 403."""
 
 from collections.abc import Iterator
 
@@ -7,7 +8,10 @@ from sqlalchemy.orm import Session
 
 from app.api.admin import connector_builder
 from app.api.auth import add_user
+from app.api.chat import chat_models
 from app.api.main import app
+from app.chat.intent import SMALL_TALK
+from app.config.settings import get_settings
 from app.db.schema import Source
 from tests.fakes import FakeConnector, api, item, login_as
 
@@ -88,6 +92,32 @@ def test_only_admins(db_session: Session) -> None:
     alice = login_as(db_session, "alice")
     calls = [("get", "/admin/sources"), ("post", "/admin/sources"),
              ("patch", "/admin/sources/1"), ("post", "/admin/sources/1/sync"),
-             ("get", "/admin/users"), ("post", "/admin/users/alice/accounts")]  # fmt: skip
+             ("get", "/admin/users"), ("post", "/admin/users/alice/accounts"),
+             ("get", "/admin/status")]  # fmt: skip
     for method, path in calls:
         assert api.request(method, path, json={}, headers=alice).status_code == 403, path
+
+
+def test_a_failed_sync_and_a_slow_answer_are_visible_to_an_admin(
+    root: dict[str, str], db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    app.dependency_overrides[connector_builder] = lambda: lambda s: Broken()
+    source = api.post("/admin/sources", json={"kind": "slack", "external_id": "C2"}, headers=root)
+    api.post(f"/admin/sources/{source.json()['id']}/sync", headers=root)
+
+    monkeypatch.setattr(get_settings(), "slow_answer_seconds", 0.0)  # every answer is "slow"
+    alice = login_as(db_session, "alice")
+    chat = api.post("/chat/sessions", json={}, headers=alice).json()["id"]
+    app.dependency_overrides[chat_models] = lambda: {
+        "classify": lambda m: [SMALL_TALK], "detect": lambda t: [0.0] * len(t)
+    }  # fmt: skip
+    api.post(f"/chat/sessions/{chat}/messages", json={"message": "hi"}, headers=alice)
+
+    status = api.get("/admin/status", headers=root).json()
+    kinds = {e["kind"]: e for e in status["events"]}
+    assert "slack is down" in kinds["sync_failed"]["message"]
+    slow = kinds["slow_answer"]
+    assert slow["details"]["chat_id"] == chat
+    assert {"memory", "guard", "intent", "total"} <= set(slow["details"]["timings"])
+    assert status["sources"][0]["last_error"] == "ConnectionError: slack is down"
+    assert api.get("/admin/status", headers=alice).status_code == 403

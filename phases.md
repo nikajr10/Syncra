@@ -507,5 +507,5 @@ flowchart LR
 - [ ] 10.2 Evaluation set and runner
 - [x] 10.3 Permission and safety tests
 - [ ] 10.4 Speed tuning
-- [ ] 10.5 Monitoring and logs
+- [x] 10.5 Monitoring and logs
 - [ ] 10.6 Final docs

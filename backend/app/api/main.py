@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 from app.api import actions, admin, auth, chat
 from app.config.settings import get_models_config, get_settings
+from app.monitor import setup_logging
 
 log = logging.getLogger("syncra.api")
 
@@ -59,6 +60,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     # Fail fast at startup with a clear message if configuration is missing.
     get_settings()
     get_models_config()
+    setup_logging()
     yield
 
 

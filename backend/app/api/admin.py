@@ -1,4 +1,5 @@
-"""Admin endpoints (Task 9.4, backend): connect sources, watch them sync, link people's accounts.
+"""Admin endpoints (Tasks 9.4, 10.5): connect sources, watch them sync, link people's accounts,
+and see what went wrong (failed syncs and learning runs, model errors, slow answers).
 
 Only admins (`users.is_admin`, set by `make add-user`) may call these; anyone else gets 403.
 The tools' credentials stay in `backend/.env`: `GET /admin/sources` says which are configured.
@@ -10,17 +11,18 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable, Sequence
 from datetime import datetime
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app import monitor
 from app.api.auth import DB, UNAUTHORIZED, Account, CurrentUser, link_account
 from app.config.settings import get_settings
 from app.db.engine import new_session
-from app.db.schema import Item, Source, User, UserSourceIdentity
+from app.db.schema import Event, Item, Source, User, UserSourceIdentity
 from app.learning.connectors import EXTERNAL_ID, Connector, build_connector
 from app.learning.sync import sync_source
 
@@ -72,6 +74,23 @@ class SourceView(BaseModel):
 class Sources(BaseModel):
     tools: dict[str, bool] = Field(description="Which tools have credentials in backend/.env")
     sources: list[SourceView]
+
+
+class EventView(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    kind: str = Field(description="sync_failed, learn_failed, model_error or slow_answer")
+    message: str
+    details: dict[str, Any]
+    created_at: datetime
+
+
+class Status(BaseModel):
+    items: dict[str, int] = Field(
+        description="Stored items by status: new, processed, noise, failed"
+    )
+    sources: list[SourceView]
+    events: list[EventView] = Field(description="The latest problems, newest first")
 
 
 class NewAccount(BaseModel):
@@ -165,6 +184,8 @@ def _sync(source_id: int, build: Callable[[Source], Connector]) -> None:
             log.exception("sync failed for %s %s", source.kind, source.name)
             source.last_error = f"{type(exc).__name__}: {exc}"[:2000]
             session.commit()
+            monitor.record("sync_failed", f"{source.kind} {source.name}: {source.last_error}",
+                           source_id=source.id)  # fmt: skip
 
 
 @router.post("/sources/{source_id}/sync", status_code=202, response_model=SourceView,
@@ -205,3 +226,19 @@ def add_account(username: str, body: NewAccount, session: DB) -> Account:
     log.info("linked %s:%s to %s", linked.source_kind, linked.external_id, username)
     return Account(tool=linked.source_kind, id=linked.external_id,
                    display_name=linked.display_name)  # fmt: skip
+
+
+@router.get("/status", response_model=Status, summary="See what went wrong")
+def status(session: DB, limit: int = 50) -> Status:
+    """Items by status, every source's last sync and error, and the latest events: failed syncs
+    and learning runs, model errors and answers slower than SLOW_ANSWER_SECONDS."""
+    counts = dict(session.execute(select(Item.status, func.count()).group_by(Item.status)).all())
+    rows = session.scalars(select(Source).order_by(Source.kind, Source.name)).all()
+    events = session.scalars(
+        select(Event).order_by(Event.id.desc()).limit(min(max(limit, 1), 500))
+    ).all()
+    return Status(
+        items=counts,
+        sources=[_view(session, s) for s in rows],
+        events=[EventView.model_validate(e) for e in events],
+    )

@@ -272,3 +272,16 @@ class Action(Base):
     result: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     created_at: Mapped[datetime] = _created_at()
     updated_at: Mapped[datetime] = _updated_at()
+
+
+class Event(Base):
+    """Something an admin should see: a failed sync or learning run, a model error, a slow
+    answer (migration 0005, written by app/monitor.py)."""
+
+    __tablename__ = "events"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    kind: Mapped[str] = mapped_column(String(30))  # sync_failed | learn_failed | model_error | …
+    message: Mapped[str] = mapped_column(Text)
+    details: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default=sqltext("'{}'::jsonb"))
+    created_at: Mapped[datetime] = _created_at()

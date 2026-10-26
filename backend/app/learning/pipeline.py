@@ -17,6 +17,7 @@ from collections.abc import Callable, Sequence
 from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
+from app import monitor
 from app.db.engine import new_session
 from app.db.schema import Chunk, Decision, Edge, Item, Source
 from app.learning import triage
@@ -71,6 +72,7 @@ def learn(
                 )
                 session.commit()
                 counts["failed"] += 1
+                monitor.record("learn_failed", f"Learning failed for items {ids}", items=ids)
 
     with session_factory() as session:
         link_identities(session)  # identities may have been linked since the last run

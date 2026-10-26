@@ -91,6 +91,12 @@ class Settings(BaseSettings):
     # --- login: a bearer token stops working this many hours after it was handed out ---
     token_ttl_hours: int = 12
 
+    # --- monitoring: answers slower than this are recorded for the admin; events older than
+    #     EVENTS_KEEP_DAYS are deleted; LOG_FORMAT json = one JSON object per log line ---
+    slow_answer_seconds: float = 10.0
+    events_keep_days: int = 30
+    log_format: Literal["text", "json"] = "text"
+
     # --- misc ---
     log_level: str = "INFO"
     api_docs: bool = False  # /docs, /redoc, /openapi.json; off unless set (local dev turns it on)

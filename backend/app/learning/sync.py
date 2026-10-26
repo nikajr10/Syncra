@@ -10,6 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
+from app import monitor
 from app.db.engine import new_session
 from app.db.schema import Item, Source, SyncCursor
 from app.learning.connectors import build_connector
@@ -141,5 +142,7 @@ def sync_all_sources(
                 source.last_error = f"{type(exc).__name__}: {exc}"[:2000]
                 session.commit()
                 results[source.name] = source.last_error
+                monitor.record("sync_failed", f"{source.kind} {source.name}: {source.last_error}",
+                               source_id=source.id)  # fmt: skip
     log.info("sync run finished: %d sources, %s", len(results), results)
     return results

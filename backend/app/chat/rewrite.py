@@ -17,6 +17,7 @@ from string import Template
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
+from app import monitor
 from app.config.settings import get_prompt, get_settings
 from app.db.schema import ChatMessage
 from app.models import gateway
@@ -57,5 +58,6 @@ def rewrite(
         question = Rewritten.model_validate_json(reply).question
     except (OllamaError, ValidationError) as exc:
         log.warning("question rewriter failed, using the message as it is: %s", exc)
+        monitor.record("model_error", f"Question rewriter: {exc}")
         return message
     return question or message

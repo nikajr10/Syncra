@@ -21,6 +21,7 @@ from app.db.schema import (
     Edge,
     Entity,
     EntityAlias,
+    Event,
     Item,
     Source,
     SyncCursor,
@@ -113,6 +114,7 @@ def test_insert_and_read_one_row_in_every_table(db_session: Session) -> None:
         )
     )
     session.add(Action(user_id=user.id, session_id=chat.id, kind="create_jira_ticket"))
+    session.add(Event(kind="sync_failed", message="slack #eng: ConnectionError"))
     session.flush()
 
     for model in Base.metadata.sorted_tables:

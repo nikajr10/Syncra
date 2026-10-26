@@ -40,10 +40,10 @@ def build_scheduler() -> BlockingScheduler:
 
 
 def main() -> None:
+    from app.monitor import setup_logging
+
     settings = get_settings()
-    logging.basicConfig(
-        level=settings.log_level, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
-    )
+    setup_logging()
     log.info("worker starting; learning every %s min", settings.sync_interval_minutes)
     try:
         build_scheduler().start()

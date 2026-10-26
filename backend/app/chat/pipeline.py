@@ -24,12 +24,14 @@ from typing import Any, Literal
 
 from sqlalchemy.orm import Session
 
+from app import monitor
 from app.chat import actions, answer, guard, intent, search
 from app.chat.check import CITATION, check, confidence
 from app.chat.intent import ACTION, QUESTION, SMALL_TALK
 from app.chat.memory import add_message, last_turns
 from app.chat.permissions import user_tags
 from app.chat.rewrite import rewrite
+from app.config.settings import get_settings
 from app.db.schema import ChatMessage, ChatSession
 from app.models.gateway import OllamaClient, OllamaError
 
@@ -83,13 +85,18 @@ def stream(
     client: OllamaClient | None = None,
     find: Find = search.find_evidence,
 ) -> Iterator[str | Reply]:
-    """The reply to one message in `chat`, piece by piece, then the `Reply`; saves the turn."""
+    """The reply to one message in `chat`, piece by piece, then the `Reply`; saves the turn.
+    Logs the time each stage took; a reply slower than SLOW_ANSWER_SECONDS is recorded."""
+    timer = monitor.Timer()
     history = last_turns(session, chat.id)
+    timer.lap("memory")
     if guard.is_attack(message, detect):
         log.warning("prompt guard blocked a message in chat %s", chat.id)
         yield Reply(BLOCKED, guard.BLOCKED_REPLY)
         return
+    timer.lap("guard")
     path = intent.route(message, classify)
+    timer.lap("intent")
     if path == SMALL_TALK:
         done = Reply(SMALL_TALK, intent.small_talk_reply(message))
     else:
@@ -97,15 +104,26 @@ def stream(
         if question != message and guard.is_attack(question, detect):
             log.warning("prompt guard flagged the rewritten question in chat %s", chat.id)
             question = message
+        timer.lap("rewrite")
         if path == ACTION:
             done = _plan(session, chat, question, client)
+            timer.lap("plan")
         else:
-            done = yield from _answer(session, chat, question, history, client, find)
+            done = yield from _answer(session, chat, question, history, client, find, timer)
     add_message(session, chat, "user", message)
     if done.reply != UNAVAILABLE:  # an outage isn't an answer: the question stays unanswered
         add_message(session, chat, "assistant", done.reply, done.sources, done.confidence)
     session.commit()
+    _timed(chat, path, timer)
     yield done
+
+
+def _timed(chat: ChatSession, path: str, timer: monitor.Timer) -> None:
+    timings = {**timer.stages, "total": timer.total()}
+    log.info("chat %s %s took %s", chat.id, path, timings, extra={"timings": timings})
+    if timings["total"] > get_settings().slow_answer_seconds:
+        monitor.record("slow_answer", f"A {path} reply took {timings['total']:.1f}s",
+                       chat_id=chat.id, timings=timings)  # fmt: skip
 
 
 def _answer(
@@ -115,18 +133,25 @@ def _answer(
     history: list[ChatMessage],
     client: OllamaClient | None,
     find: Find,
+    timer: monitor.Timer,
 ) -> Iterator[str | Reply]:
     evidence = find(question, user_tags(session, chat.user_id))
+    timer.lap("search")
     pieces = []
     try:
         for piece in answer.write(question, evidence, history, client):
+            if not pieces:
+                timer.lap("first_word")
             pieces.append(piece)
             yield piece
-    except OllamaError:
+    except OllamaError as exc:
         log.exception("answer writer failed in chat %s", chat.id)
+        monitor.record("model_error", f"Answer writer: {exc}", chat_id=chat.id)
         return Reply(QUESTION, UNAVAILABLE, question)
+    timer.lap("answer")
     draft, follow_ups = answer.split("".join(pieces))
     checked = check(draft, evidence)
+    timer.lap("check")
     if checked.removed:
         log.info("claim checker removed %d claim(s) in chat %s", len(checked.removed), chat.id)
     text = checked.text or UNSUPPORTED
@@ -138,8 +163,9 @@ def _answer(
 def _plan(session: Session, chat: ChatSession, request: str, client: OllamaClient | None) -> Reply:
     try:
         action = actions.plan(session, chat, request, client)
-    except OllamaError:
+    except OllamaError as exc:
         log.exception("action planner failed in chat %s", chat.id)
+        monitor.record("model_error", f"Action planner: {exc}", chat_id=chat.id)
         return Reply(ACTION, UNAVAILABLE, request)
     if action is None:
         return Reply(ACTION, CANT_DO, request)
