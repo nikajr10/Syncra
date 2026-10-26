@@ -1,28 +1,18 @@
-import { useState, type FormEvent } from 'react'
-import { api, token, type Me } from '@/api'
+import { type FormEvent } from 'react'
 import { Alert } from '@/components/arc/alert/alert'
 import { Button } from '@/components/arc/button/button'
 import { Input } from '@/components/arc/input/input'
 import { PasswordField } from '@/components/arc/password-field/password-field'
-import s from './Login.module.css'
+import { useLogin } from '@/hooks/useAuth'
+import s from './LoginPage.module.css'
 
-export default function Login({ onLogin }: { onLogin: (me: Me) => void }) {
-  const [error, setError] = useState('')
-  const [busy, setBusy] = useState(false)
+export default function LoginPage() {
+  const login = useLogin()
 
-  async function submit(e: FormEvent<HTMLFormElement>) {
+  function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
     const form = new FormData(e.currentTarget)
-    setBusy(true)
-    setError('')
-    try {
-      const { token: t } = await api.login(String(form.get('username')), String(form.get('password')))
-      token.set(t)
-      onLogin(await api.me())
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not sign in')
-      setBusy(false)
-    }
+    login.mutate({ username: String(form.get('username')), password: String(form.get('password')) })
   }
 
   return (
@@ -34,8 +24,8 @@ export default function Login({ onLogin }: { onLogin: (me: Me) => void }) {
         <form className={s.form} onSubmit={submit}>
           <Input label="Username" name="username" autoComplete="username" autoCapitalize="none" spellCheck={false} required autoFocus />
           <PasswordField label="Password" name="password" autoComplete="current-password" required />
-          <Alert tone="danger" title="Couldn't sign you in" open={!!error}>{error}</Alert>
-          <Button type="submit" variant="primary" size="lg" loading={busy}>Sign in</Button>
+          <Alert tone="danger" title="Couldn't sign you in" open={login.isError}>{login.error?.message}</Alert>
+          <Button type="submit" variant="primary" size="lg" loading={login.isPending}>Sign in</Button>
         </form>
         <p className={s.footnote}>No account yet? An admin creates one with <code>make add-user</code>.</p>
       </main>

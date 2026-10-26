@@ -1,7 +1,6 @@
-import { useEffect, useState } from 'react'
 import { CircleDot, FileText, GitCommitHorizontal, GitPullRequest, Lightbulb, MessageSquareCode, MessagesSquare } from 'lucide-react'
-import type { Tool } from '@/api'
-import s from './ui.module.css'
+import type { Tool } from '@/api/types'
+import s from './ToolIcon.module.css'
 
 // Brand marks from simple-icons, in their own colors (Arc: third-party logos keep their colors).
 export function BrandIcon({ tool, size = 16 }: { tool: Tool; size?: number }) {
@@ -22,50 +21,12 @@ export function BrandIcon({ tool, size = 16 }: { tool: Tool; size?: number }) {
   )
 }
 
-export const TOOL_NAME: Record<Tool, string> = { github: 'GitHub', jira: 'Jira', slack: 'Slack' }
-
-/** Which tool an item type or link came from, for the brand mark beside a source. */
-export function toolOf(type: string, link: string | null): Tool | null {
-  let host = ''
-  try { host = new URL(link ?? '').hostname } catch { /* no link */ }
-  if (/(^|\.)github\./.test(host) || ['pr', 'review', 'commit'].includes(type)) return 'github'
-  if (/(^|\.)slack\./.test(host) || ['message', 'thread'].includes(type)) return 'slack'
-  if (/(^|\.)atlassian\./.test(host) || link?.includes('/browse/') || type === 'issue') return 'jira'
-  return null
-}
-
 const TYPE_ICON: Record<string, typeof FileText> = {
   pr: GitPullRequest, review: MessageSquareCode, commit: GitCommitHorizontal,
   issue: CircleDot, message: MessagesSquare, thread: MessagesSquare, decision: Lightbulb,
-}
-const TYPE_NAME: Record<string, string> = {
-  pr: 'Pull request', review: 'Review', commit: 'Commit', issue: 'Ticket',
-  comment: 'Comment', message: 'Message', thread: 'Thread', decision: 'Decision',
 }
 
 export function TypeIcon({ type, size = 16 }: { type: string; size?: number }) {
   const Icon = TYPE_ICON[type] ?? FileText
   return <Icon size={size} strokeWidth={1.75} aria-hidden="true" />
 }
-export const typeName = (type: string) => TYPE_NAME[type] ?? type.charAt(0).toUpperCase() + type.slice(1)
-
-const units: [Intl.RelativeTimeFormatUnit, number][] = [['year', 31536e6], ['month', 2592e6], ['week', 6048e5], ['day', 864e5], ['hour', 36e5], ['minute', 6e4]]
-const rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto' })
-
-export function timeAgo(iso: string, now = Date.now()): string {
-  const diff = new Date(iso).getTime() - now
-  for (const [unit, ms] of units) if (Math.abs(diff) >= ms) return rtf.format(Math.round(diff / ms), unit)
-  return 'just now'
-}
-
-/** The part of the URL after `#`, so a reload or a shared link opens the same screen. */
-export function useHash(): string {
-  const [hash, setHash] = useState(() => location.hash.slice(1) || '/')
-  useEffect(() => {
-    const update = () => setHash(location.hash.slice(1) || '/')
-    addEventListener('hashchange', update)
-    return () => removeEventListener('hashchange', update)
-  }, [])
-  return hash
-}
-export const go = (path: string) => { location.hash = path }

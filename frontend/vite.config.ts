@@ -6,10 +6,10 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   plugins: [react()],
   resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
-  // React and Motion in their own file: it stays cached in the browser when only the app changes.
+  // React, Motion and React Query in their own file: it stays cached in the browser when only the app changes.
   build: {
     rolldownOptions: {
-      output: { codeSplitting: { groups: [{ name: 'vendor', test: /node_modules\/(react|react-dom|scheduler|motion|motion-dom|motion-utils|framer-motion)\// }] } },
+      output: { codeSplitting: { groups: [{ name: 'vendor', test: /node_modules\/(react|react-dom|scheduler|motion|motion-dom|motion-utils|framer-motion|@tanstack)\// }] } },
     },
   },
   server: {
