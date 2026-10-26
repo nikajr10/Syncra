@@ -5,10 +5,34 @@ Live record of what has been built. Agents add an entry here after every task (f
 ## Current status
 
 - **Current phase:** Phase 7 — Write and check answers
-- **Next task:** 7.3 — Claim checker (DeBERTa NLI)
-- **Completed tasks:** 0.1–0.6, 1.1–1.6, 2.1–2.3, 3.1–3.4, 4.1–4.4, 5.1–5.3, 5.5, 5.6, 6.1–6.5, 7.1, 7.2 (5.4 real model waits for HF_TOKEN)
+- **Next task:** 7.4 — Confidence score
+- **Completed tasks:** 0.1–0.6, 1.1–1.6, 2.1–2.3, 3.1–3.4, 4.1–4.4, 5.1–5.3, 5.5, 5.6, 6.1–6.5, 7.1–7.3 (5.4 real model waits for HF_TOKEN)
 
 ## Log
+
+### Task 7.3 — Claim checker (DeBERTa NLI)  ✅ done
+**Date:** 2026-10-26
+
+**Built**
+- `app/chat/check.py: check(answer, evidence) -> Checked`: the answer is split into claims (sentences, and list lines), each with the `[E#]` it cites (`[E1]`, `[E2][E3]`, `[E2, E3]`). The NLI model reads each cited piece (header + text) as premise and the claim (citations and bullets removed) as hypothesis; a claim is supported when one cited piece entails it with at least `claim_checker.threshold` (0.5). Unsupported claims are removed; the line structure of what remains is kept.
+- A claim citing nothing is checked against all the evidence; if one piece supports it, it stays and gets that citation. A claim citing a label that doesn't exist is unsupported. Sentences that only say what isn't known ("I don't know who owns it") make no claim and stay.
+- `Checked.text`, `Checked.claims` (`Claim`: text, cited labels, supported True/False/None for a hedge, best entailment probability) and `Checked.removed`.
+- `gateway.nli(role, pairs)`: {label: probability} per (premise, hypothesis) from an NLI cross-encoder.
+- Tests (real `cross-encoder/nli-deberta-v3-base`): an answer with a made-up date and team and a "Kafka" claim comes back without those two, keeps the true cited claims, cites a true uncited claim, and keeps "I don't know who owns it"; a claim citing missing evidence is removed.
+
+**Key files**
+- `backend/app/chat/check.py`, `backend/app/models/gateway.py`, `backend/config/models.yaml`, `backend/tests/test_answer.py`
+
+**Decisions**
+- The premise includes the evidence header ("Add the payment queue (review by github:bob)"): measured, "github:bob reviewed and approved the payment queue" is entailed (1.0) with it and contradicted (0.97) by the bare "approved: LGTM".
+- Uncited true claims are kept and cited instead of removed: the writer sometimes forgets a citation on a correct sentence, and removing it would lose a good answer.
+
+**How to run / test**
+- `make test`
+
+**Known issues / TODO**
+- Sentence splitting is a regex (`. ! ?` followed by a space): abbreviations like "e.g. x" split early; the halves are still checked, just separately.
+- Evidence longer than the model's 512 tokens is cut; chunks are at most ~400 tokens, so only very long decisions could be affected.
 
 ### Task 7.2 — Answer writer step (streaming)  ✅ done
 **Date:** 2026-10-26

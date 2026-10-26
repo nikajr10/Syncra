@@ -7,6 +7,7 @@
   `<role>_base` body and saved under TRAINED_MODELS_DIR; `train_setfit_held_out(role)` trains
   one on its labelled examples in config/<role>.yaml and scores it.
 - `load_gliner(role)` / `find_entities(role, texts)`: GLiNER entity finder.
+- `rerank(role, query, texts)` / `nli(role, pairs)`: cross-encoders (reranker, claim checker).
 - `load_classifier(role)` / `label_scores(role, texts, label)`: Hugging Face text classifiers
   (Prompt Guard 2), scored over the whole text in model-sized windows.
 
@@ -330,6 +331,19 @@ def rerank(role: str, query: str, candidates: list[str]) -> list[float]:
     scores = model.predict([(query, c) for c in candidates], convert_to_numpy=True)
     _log_call(get_models_config()[role].name, started, items=len(candidates))
     return [float(s) for s in scores]
+
+
+def nli(role: str, pairs: list[tuple[str, str]]) -> list[dict[str, float]]:
+    """{label: probability} per (premise, hypothesis) from the NLI cross-encoder for `role`,
+    e.g. {"entailment": 0.97, "neutral": 0.02, "contradiction": 0.01}."""
+    if not pairs:
+        return []
+    started = time.perf_counter()
+    model = load_cross_encoder(role)
+    labels = model.model.config.id2label
+    probabilities = model.predict(pairs, apply_softmax=True, convert_to_numpy=True)
+    _log_call(get_models_config()[role].name, started, items=len(pairs))
+    return [{labels[i]: float(p) for i, p in enumerate(row)} for row in probabilities]
 
 
 # --- SetFit (classifiers we train) ----------------------------------------------------------

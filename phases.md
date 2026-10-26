@@ -488,7 +488,7 @@ flowchart LR
 **Phase 7 — Write and check answers**
 - [x] 7.1 Answer writer prompt
 - [x] 7.2 Answer writer step (streaming)
-- [ ] 7.3 Claim checker (DeBERTa NLI)
+- [x] 7.3 Claim checker (DeBERTa NLI)
 - [ ] 7.4 Confidence score
 - [ ] 7.5 Full chat reply
 
