@@ -5,10 +5,30 @@ Live record of what has been built. Agents add an entry here after every task (f
 ## Current status
 
 - **Current phase:** Phase 6 — Find evidence
-- **Next task:** 6.3 — Keyword search
-- **Completed tasks:** 0.1–0.6, 1.1–1.6, 2.1–2.3, 3.1–3.4, 4.1–4.4, 5.1–5.3, 5.5, 5.6, 6.1, 6.2 (5.4 real model waits for HF_TOKEN)
+- **Next task:** 6.4 — Graph search
+- **Completed tasks:** 0.1–0.6, 1.1–1.6, 2.1–2.3, 3.1–3.4, 4.1–4.4, 5.1–5.3, 5.5, 5.6, 6.1–6.3 (5.4 real model waits for HF_TOKEN)
 
 ## Log
+
+### Task 6.3 — Keyword search  ✅ done
+**Date:** 2026-10-26
+
+**Built**
+- `search.keyword_search(session, tags, question, limit)`: PostgreSQL full-text search on `chunks.tsv` (GIN index) with the permission filter, best `ts_rank` first.
+- A question naming identifiers (a word with a digit, an underscore or an inner capital: `PAY-1234`, `charge_card`, `E4012`, `getUser`) only matches chunks containing all of them. Any other question matches chunks sharing any of its words (stop words dropped).
+- Tests: `PAY-1234`, `charge_card()` and `E4012` each find the right chunk and only it; an unknown id finds nothing; a plain question ranks the right chunk first; private chunks stay hidden; a question of stop words finds nothing.
+
+**Key files**
+- `backend/app/chat/search.py`, `backend/tests/test_search.py`
+
+**Decisions**
+- Identifiers are required, other words optional. Requiring every word of a question ("what does PAY-1234 say?") would miss the chunk over "say"; making the id optional would let common words drown it, because `ts_rank` has no rarity weighting.
+
+**How to run / test**
+- `make test`
+
+**Known issues / TODO**
+- English stemming only (`to_tsvector('english', …)`, from migration 0001).
 
 ### Task 6.2 — Vector search  ✅ done
 **Date:** 2026-10-26

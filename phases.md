@@ -481,7 +481,7 @@ flowchart LR
 **Phase 6 — Find evidence**
 - [x] 6.1 Permission filter
 - [x] 6.2 Vector search
-- [ ] 6.3 Keyword search
+- [x] 6.3 Keyword search
 - [ ] 6.4 Graph search
 - [ ] 6.5 Merge and rerank
 

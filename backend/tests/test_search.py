@@ -12,7 +12,7 @@ PUBLIC = ["public"]
 DOCS = {  # external id -> (text, access tags)
     "#42": ("Add a RabbitMQ queue between checkout and payments. The payment provider times out "
             "under load, so checkout now hands orders to a queue.", PUBLIC),
-    "PAY-1234": ("Cap refund retries at 3: the bank rejects a fourth attempt as fraud. "
+    "PAY-1234": ("PAY-1234: cap refund retries at 3: the bank rejects a fourth attempt as fraud. "
                  "See charge_card() and error E4012.", PUBLIC),
     "#7": ("Move the docs site from Jekyll to MkDocs because the Ruby toolchain keeps breaking.",
            PUBLIC),
@@ -60,3 +60,15 @@ def test_vector_search_finds_by_meaning(db_session: Session) -> None:
         db_session, [*PUBLIC, "github:repo:acme/secret"], "why queue?"
     )
     assert "secret" in _titles(everything)
+
+
+def test_keyword_search_finds_exact_terms(db_session: Session) -> None:
+    corpus(db_session)
+    for question in ("what does PAY-1234 say?", "who wrote charge_card()?", "what is error E4012"):
+        assert _titles(search.keyword_search(db_session, PUBLIC, question)) == ["PAY-1234"]
+    assert search.keyword_search(db_session, PUBLIC, "what about PAY-9999?") == []
+    found = search.keyword_search(db_session, PUBLIC, "why did the docs move to MkDocs?")
+    assert _titles(found)[0] == "#7"
+    queue = search.keyword_search(db_session, PUBLIC, "checkout queue")
+    assert "#42" in _titles(queue) and "secret" not in _titles(queue)  # not visible
+    assert search.keyword_search(db_session, PUBLIC, "the and of?") == []  # only stop words
