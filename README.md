@@ -2,9 +2,9 @@
 
 Team-memory chatbot: learns from GitHub, Jira and Slack, answers questions with cited sources. Every model runs locally.
 
-Docs: [`description.md`](description.md) (what it is) · [`flow.md`](flow.md) (how it works, end to end) · [`decision.md`](decision.md) (why it's built this way) · [`phases.md`](phases.md) (task list) · [`progress.md`](progress.md) (what's done) · [`agent.md`](agent.md) (how agents work on it).
+Docs: [`description.md`](description.md) (what it is) · [`flow.md`](flow.md) (how it works, end to end) · [`decision.md`](decision.md) (why it's built this way) · [`phases.md`](phases.md) (task list) · [`progress.md`](progress.md) (what's done) · [`timing.md`](timing.md) (how fast it answers) · [`agent.md`](agent.md) (how agents work on it).
 
-Layout: `backend/` (Python API + pipelines) · `frontend/` (web app, Phase 9).
+Layout: `backend/` (Python API + pipelines) · `frontend/` (a clickable prototype on demo data, not yet connected to the API).
 
 ## Local development (no Docker)
 
@@ -94,7 +94,7 @@ docker compose run --rm api python scripts/train.py triage
 docker compose run --rm api python scripts/train.py intent_router
 ```
 
-The API listens on `127.0.0.1:API_PORT` (default 8000) only: put a TLS reverse proxy (Caddy / nginx) in front of it, and don't make it public before login exists (Phase 9). API docs (`/docs`) are off in production. The compose Postgres is reachable from the host only on `127.0.0.1:POSTGRES_PORT`. For an NVIDIA GPU, build with `--build-arg TORCH_INDEX_URL=https://download.pytorch.org/whl/cu124` and uncomment the GPU reservation on the `ollama` service.
+The API listens on `127.0.0.1:API_PORT` (default 8000) only: put a TLS reverse proxy (Caddy / nginx) in front of it, and don't make it public before rate limits are in place. API docs (`/docs`) are off in production. The compose Postgres is reachable from the host only on `127.0.0.1:POSTGRES_PORT`. For an NVIDIA GPU, build with `--build-arg TORCH_INDEX_URL=https://download.pytorch.org/whl/cu124` and uncomment the GPU reservation on the `ollama` service.
 
 ## Security
 

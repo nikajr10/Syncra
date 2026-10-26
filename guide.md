@@ -211,8 +211,10 @@ make train-intent-router  # trains the chat's intent router (~25 s), prints its 
 ```
 
 - Models are listed in `backend/config/models.yaml`. Change models there, not in code.
-- `meta-llama/Llama-Prompt-Guard-2-86M` is **gated**: it needs a Hugging Face token, which you'll get later.
-  Until then it's skipped (the script says so); the rest still download.
+- `meta-llama/Llama-Prompt-Guard-2-86M` is **gated**: it needs a Hugging Face token. Accept Meta's licence on
+  its Hugging Face page, create a token (Settings → Access Tokens, "read"), put it in `backend/.env` as
+  `HF_TOKEN=…` and run `make download-models` again. Until then it's skipped (the script says so), the rest
+  still download, and **chat messages fail at the prompt guard**.
 - Downloads are big and slow — do this on good Wi-Fi. You only do it once.
 - `make train-triage` and `make train-intent-router` save their classifiers in `backend/trained_models/`
   (not in git). Run each again whenever its examples (`backend/config/triage.yaml`,
@@ -232,12 +234,20 @@ or http://127.0.0.1:8000/docs for the interactive API page. Stop with `Ctrl+C`.
 Everything else in the API needs a login. Create one for yourself (in a second terminal, inside `backend/`):
 
 ```bash
-make add-user      # asks for a username, a display name and a password (8+ characters)
+make add-user      # asks for a username, a display name, a password (8+ characters) and "Admin?" (say y)
 ```
 
 In http://127.0.0.1:8000/docs, open `POST /auth/login`, click **Try it out**, send your username and
 password, and copy the `token` from the answer. Click **Authorize** at the top of the page and paste it.
 Now `GET /me` shows who you are. A token works for 12 hours; then log in again.
+
+**Chat.** In `/docs`, `POST /chat/sessions` starts a chat (copy its `id`), then
+`POST /chat/sessions/{id}/messages` with `{"message": "who built the payment service?"}` answers with cited
+`sources`, a `confidence` and `follow_ups`. "Open a Jira ticket to …" returns an approval card instead;
+approve it with `POST /actions/{id}/approve`. The first question after `make run` can take a few extra
+seconds while the models finish loading.
+
+**No data yet?** Load the demo company (step 11) to try the chat right away.
 
 To sync and learn from GitHub/Jira/Slack in the background, run `make worker` in a second terminal (also inside `backend/`).
 It needs Ollama running and the noise filter trained (`make train-triage`, step 8).
@@ -248,21 +258,39 @@ It needs the source credentials (step 10).
 ## 10. Connect a data source (optional)
 
 1. Get the source credentials from the project owner and add them to `backend/.env`.
-2. Add one row per repo / project / channel to the `sources` table (DBeaver SQL editor works):
-
-   ```sql
-   insert into sources (kind, name, external_id) values
-     ('github', 'acme/payments', 'acme/payments'),   -- owner/repo
-     ('jira',   'PAY',           'PAY'),             -- project key
-     ('slack',  '#eng-payments', 'C0123456789');     -- channel id
-   ```
+2. Logged in as an admin in http://127.0.0.1:8000/docs, add one source per repo / project / channel with
+   `POST /admin/sources`, e.g. `{"kind": "github", "external_id": "acme/payments"}`,
+   `{"kind": "jira", "external_id": "PAY"}` or `{"kind": "slack", "external_id": "C0123456789", "name": "#eng"}`.
+   `GET /admin/sources` shows each one's last sync and error; `POST /admin/sources/{id}/sync` syncs one now.
+   The tokens need to see who can read each source: push access to private GitHub repos, the Slack scopes
+   `channels:read` / `groups:read`, and permission to see Jira project permissions.
 3. `make worker` — new items show up in the `items` table (personal data and secrets are scrubbed first), then the
    worker learns from them: `chunks`, `entities`, `decisions` and `edges` fill up, and each item's `status` becomes
    `processed` or `noise`.
 4. Link each person's accounts to their Syncra user with `make link-account`. It asks for the username, the tool
    (`github`, `jira` or `slack`) and the account id: the GitHub login, the Jira accountId, or the Slack member id
-   (`U0123…`, from their Slack profile → ⋮ → Copy member ID). Only whoever runs these commands (the admin) can link
-   accounts, because later they decide what each user may search.
+   (`U0123…`, from their Slack profile → ⋮ → Copy member ID). Admins can also use
+   `POST /admin/users/{username}/accounts` in `/docs`. Only admins can link accounts, because they decide what each
+   user may search: a user sees only what their linked accounts can see in the tool itself.
+5. `GET /admin/status` shows failed syncs, model errors and slow answers.
+
+---
+
+## 11. Try the demo company (optional)
+
+Want to try the chat without real accounts? Load Acme Pay, a made-up payments company:
+
+```bash
+make demo          # asks for one password for all demo users; takes about 3 minutes
+```
+
+It needs Ollama running and both classifiers trained (step 8). Then log in as `alice` or `dave` with that
+password and ask "Why do orders go through a queue before payments?" or "Who reviewed the idempotency keys PR?".
+alice is on the payments team and dave on the auth team, so each sees only their team's private data.
+
+To keep the demo apart from real data, load it into its own database:
+`DATABASE_URL=postgresql+psycopg://YOU@localhost:5434/syncra_demo make db-init migrate demo`
+(and start the API with the same `DATABASE_URL`).
 
 ---
 
@@ -277,6 +305,7 @@ make migrate        # only if new migrations came in (safe to run anyway)
 make train-triage   # only if config/triage.yaml changed
 make train-intent-router   # only if config/intent_router.yaml changed
 make run
+make worker         # in a second terminal, if you have sources connected
 ```
 
 Postgres (`brew services`) and Ollama keep running in the background.
@@ -306,6 +335,21 @@ Postgres (`brew services`) and Ollama keep running in the background.
 **`No trained triage classifier in …`**: run `make train-triage`.
 
 **`No trained intent_router classifier in …`**: run `make train-intent-router`.
+
+**Every chat message fails with an error about `Llama-Prompt-Guard-2`**: the prompt guard can't load. Add
+`HF_TOKEN` to `backend/.env` (step 8) and run `make download-models`.
+
+**Answers say "Sorry, I can't write an answer right now"**: Ollama isn't reachable. Start it, and check
+`ollama list` shows `qwen3:8b` and `qwen3:4b` (`make pull-models`).
+
+**Answers always say "I don't know"**: nothing you can see matches. Check that sources synced
+(`GET /admin/sources`), that the worker has learned from them, and that an admin linked your accounts
+(`GET /me`): without linked accounts you only see public items.
+
+**A source shows `last_error`**: usually a token without the right access. The error text says which call
+failed; fix the token in `.env` and `POST /admin/sources/{id}/sync`.
+
+**Answers are slow**: see `timing.md`. Keep Ollama running; the first question after a restart loads models.
 
 **Packages behaving strangely**: rebuild the venv with `rm -rf .venv && make install`.
 

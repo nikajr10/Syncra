@@ -165,7 +165,7 @@ flowchart TD
     end
 
     subgraph Q3["Stage 3 — Find evidence (hybrid search)"]
-        R1["Vector search<br/>SBERT · pgvector"]
+        R1["Vector search<br/>Qwen3-Embedding · pgvector"]
         R2["Keyword search<br/>full-text index"]
         R3["Graph search<br/>follows links"]
         RR["Reranker (cross-encoder)<br/>scores every match, keeps best 8"]
@@ -192,6 +192,8 @@ flowchart TD
 
 **Question rewriter** 🟪 (**Qwen3 4B via Ollama**). Turn a follow-up into a standalone question: `"who built it?"` → `"who built the payment service?"`.
 
+*As built:* the guard and the intent router read the message as the user wrote it, before the rewriter, so small talk never waits for an LLM and an attack never reaches one. Only questions and actions are rewritten, and the rewrite is guarded again.
+
 ### Stage 2 — Safety and intent
 
 **Prompt guard** (**Meta Prompt Guard 2**). Detect and block prompt-injection / jailbreak attempts.
@@ -204,13 +206,13 @@ flowchart TD
 
 ### Stage 3 — Find evidence (hybrid search)
 
-Three searches run **in parallel**, and each **only searches what this user is allowed to see** (permissions are applied inside the search, not afterwards).
+Three searches run **in parallel**, and each **only searches what this user is allowed to see** (permissions are applied inside the search, not afterwards). *As built:* every sync records who can see each source (Slack channel members, private-repo collaborators, Jira users who can browse the project); a user sees an item when one of their linked accounts can see its source, or when it is public.
 
-- **Vector search** (SBERT question vector → pgvector) is good at meaning: "why is checkout slow?"
+- **Vector search** (Qwen3-Embedding question vector → pgvector) is good at meaning: "why is checkout slow?"
 - **Keyword search** (PostgreSQL full-text index) is good at exact terms: `PAY-1234`, `retry_limit`.
-- **Graph search** (follows links in the knowledge graph) is good at relationships: "who reviewed X?", "what depends on Y?"
+- **Graph search** (follows links in the knowledge graph) is good at relationships: "who reviewed X?", "what depends on Y?" *As built:* names in the question are found among the entity aliases (no GLiNER call), then links are followed two steps out.
 
-All matches go to a **reranker** — a **cross-encoder** from Hugging Face `sentence-transformers` — which scores every match against the question and **keeps the best 8**.
+All matches go to a **reranker** — a **cross-encoder** from Hugging Face `sentence-transformers` — which scores every match against the question and **keeps the best 8**. Matches it scores as clearly unrelated are dropped, so an unrelated question gets "I don't know" without calling the LLM.
 
 ### Stage 4 — Write the answer
 
@@ -222,13 +224,15 @@ Rules:
 
 ### Stage 5 — Check the answer
 
-**Claim checker** (**DeBERTa** NLI model). Check each claim against the evidence it cites. **Unsupported claims are removed.**
+**Claim checker** (**DeBERTa** NLI model). Check each claim against the evidence it cites. **Unsupported claims are removed.** *As built:* a true claim missing its citation gets one, and an unsupported ", which …" tail is cut rather than deleting the whole sentence.
 
 **Confidence score** (based on the checker and reranker scores). Label the answer **high**, **medium** or **low**.
 
 ### Chat reply
 
-The user receives **answer · sources (clickable links) · confidence · suggested follow-ups**. The turn is **saved to chat history**.
+The user receives **answer · sources (clickable links) · confidence · suggested follow-ups**. The turn is **saved to chat history**. *As built:* the answer streams as Server-Sent Events while it is written; the final event carries the checked version, which replaces the draft.
+
+**Actions** *(as built)*: so far one kind, **create a Jira ticket**. Qwen3 8B fills in the project (one the user can see), title and description; the card waits as `pending` until the user approves it, then the ticket is created and the result recorded.
 
 ---
 
@@ -267,6 +271,7 @@ All in **PostgreSQL**.
 - Pick the path: **SetFit** (Hugging Face)
 - Rank evidence: **Cross-encoder** (sentence-transformers)
 - Write the answer 🟪: **Qwen3 8B** (Ollama)
+- Plan actions 🟪: **Qwen3 8B** (Ollama)
 - Check claims: **DeBERTa** NLI (Hugging Face)
 
 **Both pipelines**

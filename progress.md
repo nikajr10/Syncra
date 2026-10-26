@@ -4,11 +4,32 @@ Live record of what has been built. Agents add an entry here after every task (f
 
 ## Current status
 
-- **Current phase:** Phase 10 — Quality and launch
-- **Next task:** 10.6 — Final docs
-- **Completed tasks:** 0.1–0.6, 1.1–1.6, 2.1–2.3, 3.1–3.4, 4.1–4.4, 5.1–5.3, 5.5, 5.6, 6.1–6.5, 7.1–7.5, 8.1–8.2, 9.4 backend, 10.1–10.3, 10.4 (target partly met), 10.5 (5.4 real model waits for HF_TOKEN; 9.1–9.3 frontend kept as is)
+- **Current phase:** All phases done for the backend (Phase 9 frontend kept as is by the user's request)
+- **Next task:** None in phases.md. Open: the real Prompt Guard run (5.4) once HF_TOKEN is set; the web app (9.1–9.3) when the user wants the frontend connected; the 3-second first word (10.4, see timing.md)
+- **Completed tasks:** 0.1–0.6, 1.1–1.6, 2.1–2.3, 3.1–3.4, 4.1–4.4, 5.1–5.3, 5.5, 5.6, 6.1–6.5, 7.1–7.5, 8.1–8.2, 9.4 (backend), 10.1–10.3, 10.5, 10.6. Partly: 5.4 (code and tests; the real model waits for HF_TOKEN), 10.4 (first word 3.5–4 s, see timing.md). Not built: 9.1–9.3 (frontend kept as is).
 
 ## Log
+
+### Task 10.6 — Final docs  ✅ done
+**Date:** 2026-10-26
+
+**Built**
+- `README.md`: Demo section (`make demo`, demo questions, a separate demo database, `make eval`), Chat section, sources through the admin API, `timing.md` in the doc list, the frontend described as the unconnected prototype it is.
+- `guide.md`: the `HF_TOKEN` step for Prompt Guard 2 spelled out, the admin question in `make add-user`, how to chat and approve actions in `/docs`, sources and account links through the admin API, `GET /admin/status`, a new step 11 for the demo company, and troubleshooting for the guard without a token, Ollama down, "I don't know" everywhere, a source with `last_error` and slow answers.
+- `description.md` kept in sync: Qwen3-Embedding (not SBERT) for vector search, and "As built" notes on the stage order, permissions, graph search by alias, the reranker cut-off, claim trimming, streaming and actions; the action planner in the model list.
+- `flow.md`: what the API offers now; `agent.md` §3: the chat, Phase 10 tools and what's open; `.env.example`: every new setting.
+
+**Key files**
+- `README.md`, `guide.md`, `description.md`, `flow.md`, `agent.md`, `backend/.env.example`
+
+**Decisions**
+- No tables anywhere, as the user asked.
+
+**How to run / test**
+- Clone → README "Local development" → `make demo` → `make run` → `/docs`.
+
+**Known issues / TODO**
+- A working chat needs `HF_TOKEN` (Prompt Guard 2 is gated); the README and guide say so.
 
 ### Task 10.4 — Speed tuning  ⚠️ partly done
 **Date:** 2026-10-26

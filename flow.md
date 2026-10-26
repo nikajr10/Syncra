@@ -180,6 +180,8 @@ The exact wording changes from run to run, but the real qwen3:8b found both deci
 
 **Logging in.** An admin creates users with `make add-user`; passwords are stored only as scrypt hashes. `POST /auth/login` checks the password and hands out a random token, and `auth_tokens` keeps only its SHA-256 with an expiry (12 hours by default). Each later request sends `Authorization: Bearer <token>`; the API hashes it, finds the user, and answers 401 if the token is missing, unknown or expired. `POST /auth/logout` deletes the token, and `GET /me` shows the user and the accounts an admin linked to them.
 
+**What else it offers.** The chat endpoints (`/chat/…`, see the next section) answer questions and plan actions; `/actions/…` approves or rejects them. Admins get `/admin/…`: add, pause and sync sources, link people's accounts, and `GET /admin/status` for failed syncs, model errors and slow answers.
+
 The API documentation is on locally (`API_DOCS=true` in `.env`) and always off in production: Swagger UI at `/docs`, where you can log in and try every endpoint, and ReDoc at `/redoc`. Both are built from the code itself, so they list every endpoint with what it expects and returns. In production the API listens only on the server itself until the Phase 9 hardening (TLS proxy, rate limits) is in place.
 
 ---

@@ -508,4 +508,4 @@ flowchart LR
 - [x] 10.3 Permission and safety tests
 - [ ] 10.4 Speed tuning
 - [x] 10.5 Monitoring and logs
-- [ ] 10.6 Final docs
+- [x] 10.6 Final docs
