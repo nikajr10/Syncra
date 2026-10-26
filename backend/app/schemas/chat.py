@@ -17,7 +17,7 @@ class Chat(BaseModel):
 
     id: int
     title: str | None
-    updated_at: datetime = Field(description="When a message was last sent")
+    updated_at: datetime = Field(description="Last message time")
 
 
 class Message(BaseModel):
@@ -25,8 +25,8 @@ class Message(BaseModel):
 
     role: str = Field(description="user or assistant")
     content: str
-    sources: list[dict[str, Any]] = Field(description="The evidence an answer cites")
-    confidence: str | None = Field(description="high, medium or low, on answers")
+    sources: list[dict[str, Any]] = Field(description="Cited sources")
+    confidence: str | None = Field(description="high, medium or low")
     created_at: datetime
 
 
@@ -42,11 +42,10 @@ class NewMessage(BaseModel):
 
 class Suggestions(BaseModel):
     questions: list[str] = Field(
-        description="Questions about recent decisions and tickets you can see",
         examples=[
             ['What did we decide about "Rate limit the public API"?', "What does PAY-160 say?"]
         ],
     )
     ticket_project: str | None = Field(
-        description="A Jira project you may open tickets in, to offer an action", examples=["PAY"]
+        description="Jira project the user can create tickets in", examples=["PAY"]
     )

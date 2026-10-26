@@ -9,7 +9,7 @@ import { safeUrl } from '@/lib/format'
 import s from './chat.module.css'
 
 const STATUS: Record<Card['status'], [BadgeTone, string]> = {
-  pending: ['info', 'Waiting for you'],
+  pending: ['info', 'Pending'],
   approved: ['info', 'Running'],
   rejected: ['neutral', 'Rejected'],
   done: ['success', 'Created'],
@@ -35,7 +35,7 @@ export function ActionCard({ card, chatLink }: { card: Card; chatLink?: boolean 
       {card.status === 'pending' && (
         <div className={s.cardActions}>
           <Button variant="ghost" size="sm" loading={busy === 'reject'} disabled={!!busy} onClick={() => run('reject')}>Reject</Button>
-          <Button variant="primary" size="sm" loading={busy === 'approve'} disabled={!!busy} onClick={() => run('approve')}>Approve and create</Button>
+          <Button variant="primary" size="sm" loading={busy === 'approve'} disabled={!!busy} onClick={() => run('approve')}>Approve</Button>
         </div>
       )}
       {card.status === 'done' && card.result?.key && (
@@ -45,7 +45,7 @@ export function ActionCard({ card, chatLink }: { card: Card; chatLink?: boolean 
       )}
       {card.status === 'failed' && card.result?.error && <p className={s.cardError}>{card.result.error}</p>}
       {decide.error && <p className={s.cardError} role="alert">{decide.error.message}</p>}
-      {chatLink && card.session_id && <a className={s.cardLink} href={`#/chat/${card.session_id}`}>Open the chat</a>}
+      {chatLink && card.session_id && <a className={s.cardLink} href={`#/chat/${card.session_id}`}>View chat</a>}
     </section>
   )
 }

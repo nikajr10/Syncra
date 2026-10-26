@@ -20,14 +20,12 @@ export default function LoginPage() {
       <main className={s.card}>
         <img src="/favicon.svg" alt="" width={40} height={40} className={s.logo} />
         <h1 className={s.title}>Sign in to Syncra</h1>
-        <p className={s.lead}>Ask what your team knows. Every answer shows where it came from.</p>
         <form className={s.form} onSubmit={submit}>
           <Input label="Username" name="username" autoComplete="username" autoCapitalize="none" spellCheck={false} required autoFocus />
           <PasswordField label="Password" name="password" autoComplete="current-password" required />
-          <Alert tone="danger" title="Couldn't sign you in" open={login.isError}>{login.error?.message}</Alert>
+          <Alert tone="danger" title="Sign-in failed" open={login.isError}>{login.error?.message}</Alert>
           <Button type="submit" variant="primary" size="lg" loading={login.isPending}>Sign in</Button>
         </form>
-        <p className={s.footnote}>No account yet? An admin creates one with <code>make add-user</code>.</p>
       </main>
     </div>
   )

@@ -53,12 +53,11 @@ export default function ChatPage({ chatId, name }: { chatId: number | null; name
         onScroll={e => { const el = e.currentTarget; stuck.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48 }}
       >
         <div className={s.column}>
-          {error && <Alert tone="danger" title="This chat didn't load">{error.message}</Alert>}
+          {error && <Alert tone="danger" title="Failed to load chat">{error.message}</Alert>}
           {!turns && !error && <div className={s.loading}><Skeleton lines={2} /><Skeleton lines={4} /></div>}
           {empty && (
             <div className={s.welcome}>
-              <h1 className={s.hello}>What do you want to know, {name}?</h1>
-              <p className={s.helloLead}>Ask about decisions, code, tickets or conversations. Answers cite the GitHub, Jira and Slack items they come from.</p>
+              <h1 className={s.hello}>Hi, {name}</h1>
               <Starters
                 suggested={suggestions.data ?? (suggestions.isError ? NO_SUGGESTIONS : null)}
                 onAsk={send}

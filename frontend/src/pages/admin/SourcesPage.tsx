@@ -18,9 +18,9 @@ import { TOOL_NAME, TOOLS, timeAgo, toolOptions } from '@/lib/format'
 import s from './admin.module.css'
 
 const ID_HINT: Record<Tool, string> = {
-  github: 'The repo as owner/name, like acme/payments',
-  jira: 'The project key, like PAY',
-  slack: 'The channel id, like C0123ABCD (channel details, at the bottom)',
+  github: 'owner/repo, e.g. acme/payments',
+  jira: 'Project key, e.g. PAY',
+  slack: 'Channel ID, e.g. C0123ABCD',
 }
 
 export default function SourcesPage() {
@@ -30,10 +30,9 @@ export default function SourcesPage() {
   return (
     <Page
       title="Sources"
-      lead="The repos, projects and channels Syncra learns from. A new source syncs with the next learning run, or now."
       action={<Button variant="primary" onClick={() => setAdding(true)}><Plus size={16} strokeWidth={1.75} aria-hidden="true" />Add source</Button>}
     >
-      {error && <Alert tone="danger" title="Sources didn't load">{error.message}</Alert>}
+      {error && <Alert tone="danger" title="Failed to load sources">{error.message}</Alert>}
       {!data && !error && <Skeleton lines={4} />}
       {data && (
         <>
@@ -44,13 +43,13 @@ export default function SourcesPage() {
                 <span className={s.toolName}>{TOOL_NAME[t]}</span>
                 {data.tools[t]
                   ? <Badge tone="success" size="sm">Connected</Badge>
-                  : <Badge tone="warning" size="sm">No token in backend/.env</Badge>}
+                  : <Badge tone="warning" size="sm">Not configured</Badge>}
               </li>
             ))}
           </ul>
 
           {data.sources.length === 0
-            ? <EmptyState title="No sources yet" description="Add a GitHub repo, Jira project or Slack channel and Syncra starts learning from it." action={<Button variant="secondary" onClick={() => setAdding(true)}>Add source</Button>} />
+            ? <EmptyState title="No sources" description="Add a GitHub repo, Jira project or Slack channel." action={<Button variant="secondary" onClick={() => setAdding(true)}>Add source</Button>} />
             : (
               <ul className={s.list} aria-label="Sources">
                 {data.sources.map(src => <SourceRow key={src.id} source={src} />)}
@@ -80,14 +79,14 @@ function SourceRow({ source }: { source: SourceView }) {
         </div>
         <div className={s.rowMeta}>
           {syncing
-            ? <span>Syncing now…</span>
+            ? <span>Syncing…</span>
             : source.last_error
             ? <Badge tone="danger" size="sm">Last sync failed</Badge>
             : !source.enabled
               ? <Badge size="sm">Paused</Badge>
               : <span>{source.last_synced_at ? `Synced ${timeAgo(source.last_synced_at)}` : 'Not synced yet'}</span>}
           <span>{source.items.toLocaleString()} items</span>
-          <span>{source.members} {source.members === 1 ? 'person' : 'people'} can see it</span>
+          <span>{source.members} {source.members === 1 ? 'member' : 'members'}</span>
         </div>
         {source.last_error && <ExpandableText lines={2} className={s.error}>{source.last_error}</ExpandableText>}
         {error && <p className={s.error} role="alert">{error.message}</p>}
@@ -123,12 +122,12 @@ function AddSource({ open, onOpenChange }: { open: boolean; onOpenChange: (o: bo
 
   return (
     <Dialog open={open} onOpenChange={o => { onOpenChange(o); if (!o) add.reset() }}>
-      <DialogContent title="Add a source" description="Syncra reads it with the credentials in backend/.env and only shows it to people who can see it there.">
+      <DialogContent title="Add source">
         <form className={s.form} onSubmit={submit}>
           <Select label="Tool" options={toolOptions} value={kind} onValueChange={v => setKind(v as Tool)} />
-          <Input label={kind === 'github' ? 'Repository' : kind === 'jira' ? 'Project key' : 'Channel id'} description={ID_HINT[kind]} name="external_id" required autoComplete="off" spellCheck={false} />
-          <Input label="Name" description="Optional. Shown in answers instead of the id." name="name" autoComplete="off" />
-          <Alert tone="danger" title="Couldn't add it" open={add.isError}>{add.error?.message}</Alert>
+          <Input label={kind === 'github' ? 'Repository' : kind === 'jira' ? 'Project key' : 'Channel ID'} description={ID_HINT[kind]} name="external_id" required autoComplete="off" spellCheck={false} />
+          <Input label="Name" description="Optional" name="name" autoComplete="off" />
+          <Alert tone="danger" title="Failed to add source" open={add.isError}>{add.error?.message}</Alert>
           <div className={s.formActions}>
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
             <Button type="submit" variant="primary" loading={add.isPending}>Add source</Button>

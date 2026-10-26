@@ -24,7 +24,7 @@ from app.services.chat import pipeline
 from app.services.chat.actions import jira_projects
 from app.services.chat.permissions import user_tags, visible
 
-router = APIRouter(prefix="/chat", tags=["Chat"], responses=UNAUTHORIZED)
+router = APIRouter(prefix="/chat", tags=["Chats"], responses=UNAUTHORIZED)
 NOT_FOUND = {404: {"description": "Not one of your chats"}}
 
 
@@ -51,11 +51,10 @@ def same_topic(a: str, b: str) -> bool:
     return bool(wa and wb) and len(wa & wb) / min(len(wa), len(wb)) >= 0.6
 
 
-@router.get("/suggestions", summary="Questions to start with")
+@router.get("/suggestions", summary="Suggested questions")
 def suggestions(user: CurrentUser, session: DB) -> Suggestions:
-    """A few questions built from the newest decisions in tickets and PRs the user may see, and
-    the newest Jira ticket on another topic; no model is involved. Empty when they see nothing.
-    Titles are quoted as they are: some name a change ("Rate limit …"), some a thing."""
+    # From the newest decisions in tickets and PRs the user may see, plus the newest Jira ticket
+    # on another topic. Titles are quoted as they are: some name a change, some a thing.
     tags = user_tags(session, user.id)
     titles = session.scalars(
         select(Item.title)
@@ -83,7 +82,7 @@ def suggestions(user: CurrentUser, session: DB) -> Suggestions:
     return Suggestions(questions=questions, ticket_project=next(iter(projects), None))
 
 
-@router.post("/sessions", status_code=201, response_model=Chat, summary="Start a chat")
+@router.post("/sessions", status_code=201, response_model=Chat, summary="Create chat")
 def new_chat(body: NewChat, user: CurrentUser, session: DB) -> ChatSession:
     chat = ChatSession(user_id=user.id, title=body.title)
     session.add(chat)
@@ -91,9 +90,9 @@ def new_chat(body: NewChat, user: CurrentUser, session: DB) -> ChatSession:
     return chat
 
 
-@router.get("/sessions", response_model=list[Chat], summary="List my chats")
+@router.get("/sessions", response_model=list[Chat], summary="List chats")
 def chats(user: CurrentUser, session: DB) -> Sequence[ChatSession]:
-    """The user's chats, most recently used first."""
+    """Most recently updated first."""
     return session.scalars(
         select(ChatSession)
         .where(ChatSession.user_id == user.id)
@@ -104,36 +103,33 @@ def chats(user: CurrentUser, session: DB) -> Sequence[ChatSession]:
 @router.get(
     "/sessions/{chat_id}/messages",
     response_model=list[Message],
-    summary="Read a chat",
+    summary="List messages",
     responses=NOT_FOUND,
 )
 def messages(chat_id: int, user: CurrentUser, session: DB) -> Sequence[ChatMessage]:
-    """Every message of one of the user's chats, oldest first."""
+    """Oldest first."""
     chat = own_chat(session, user, chat_id)
     return session.scalars(
         select(ChatMessage).where(ChatMessage.session_id == chat.id).order_by(ChatMessage.id)
     ).all()
 
 
-@router.post("/sessions/{chat_id}/messages", summary="Send a message", responses=NOT_FOUND)
+@router.post("/sessions/{chat_id}/messages", summary="Send message", responses=NOT_FOUND)
 def send(
     chat_id: int,
     body: NewMessage,
     user: CurrentUser,
     session: DB,
 ) -> pipeline.Reply:
-    """Reply to one message and save the turn. `path` says how it was handled: `small_talk`
-    (an instant reply), `question` (an answer citing its `sources` as [E1]…, with a
-    `confidence` and `follow_ups`) or `action`, or `blocked` (a prompt attack, not saved).
-    `question` is the message rewritten to stand on its own."""
+    """`path` is one of `small_talk`, `question`, `action` or `blocked` (not saved)."""
     chat = own_chat(session, user, chat_id)
     return pipeline.reply(session, chat, body.message)
 
 
 STREAM_DOC = {
     200: {
-        "description": "Server-Sent Events: `token` events (`{\"text\": …}`) while the answer is "
-        "written, then one `done` event with the reply, as from *Send a message*.",
+        "description": "Server-Sent Events: `token` events, then one `done` event with the "
+        "reply, as from *Send message*.",
         "content": {"text/event-stream": {"example": 'event: token\ndata: {"text": "Alice"}\n\n'
                                           'event: done\ndata: {"path": "question", …}\n\n'}},
     },
@@ -147,7 +143,7 @@ def _event(name: str, data: object) -> str:
 
 @router.post(
     "/sessions/{chat_id}/messages/stream",
-    summary="Send a message, streamed",
+    summary="Send message (stream)",
     response_class=StreamingResponse,
     responses=STREAM_DOC,
 )
@@ -157,8 +153,8 @@ def send_streamed(
     user: CurrentUser,
     session: DB,
 ) -> StreamingResponse:
-    """Like *Send a message*, but the answer arrives word by word as Server-Sent Events. The
-    streamed words are the draft; the `done` event carries the checked reply that was saved."""
+    """Same as *Send message*, streamed as Server-Sent Events. The `done` event carries the
+    saved reply."""
     own_chat(session, user, chat_id)  # 404 before the stream starts
 
     def events() -> Iterator[str]:

@@ -18,7 +18,7 @@ class NewSource(BaseModel):
         description="GitHub owner/repo, Jira project key or Slack channel id",
         examples=["acme/payments"],
     )
-    name: str | None = Field(default=None, max_length=200, description="Shown in answers")
+    name: str | None = Field(default=None, max_length=200, description="Display name")
 
 
 class SourceChange(BaseModel):
@@ -32,13 +32,13 @@ class SourceView(BaseModel):
     external_id: str
     enabled: bool
     last_synced_at: datetime | None
-    last_error: str | None = Field(description="Why the last sync failed; empty once one works")
-    items: int = Field(description="Items stored from it")
-    members: int = Field(description="Accounts that may see it, at the last sync")
+    last_error: str | None = Field(description="Last sync error")
+    items: int = Field(description="Stored item count")
+    members: int = Field(description="Member count at last sync")
 
 
 class Sources(BaseModel):
-    tools: dict[str, bool] = Field(description="Which tools have credentials in backend/.env")
+    tools: dict[str, bool] = Field(description="Tools with credentials configured")
     sources: list[SourceView]
 
 
@@ -56,7 +56,7 @@ class Status(BaseModel):
         description="Stored items by status: new, processed, noise, failed"
     )
     sources: list[SourceView]
-    events: list[EventView] = Field(description="The latest problems, newest first")
+    events: list[EventView] = Field(description="Newest first")
 
 
 class NewAccount(BaseModel):

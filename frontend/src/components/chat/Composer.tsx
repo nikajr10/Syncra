@@ -38,14 +38,13 @@ export function Composer({ busy, onSend, initial }: { busy: boolean; onSend: (te
           value={text}
           onChange={e => setText(e.target.value)}
           onKeyDown={onKeyDown}
-          placeholder="Ask about your team's work"
+          placeholder="Ask a question"
           autoFocus={matchMedia('(pointer: fine)').matches} // no keyboard popping up on phones
         />
         <button type="submit" className={s.send} disabled={!text.trim() || busy} aria-label="Send">
           <ArrowUp size={18} strokeWidth={2} aria-hidden="true" />
         </button>
       </div>
-      <p className={s.hint}>Enter to send, Shift and Enter for a new line. Check the sources before you act on an answer.</p>
     </form>
   )
 }

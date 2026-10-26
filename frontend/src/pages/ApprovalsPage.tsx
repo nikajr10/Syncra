@@ -19,23 +19,22 @@ export default function ApprovalsPage() {
   return (
     <Page
       title="Approvals"
-      lead="What Syncra offered to do for you. Nothing runs until you approve it."
       action={
         <SegmentedControl
           label="Show"
           value={filter}
           onValueChange={setFilter}
-          options={[{ value: 'pending', label: `Waiting (${pending.length})` }, { value: 'all', label: 'All' }]}
+          options={[{ value: 'pending', label: `Pending (${pending.length})` }, { value: 'all', label: 'All' }]}
         />
       }
     >
-      {error && <Alert tone="danger" title="Approvals didn't load">{error.message}</Alert>}
+      {error && <Alert tone="danger" title="Failed to load approvals">{error.message}</Alert>}
       {!actions && !error && <Skeleton lines={4} />}
       {actions && (list.length === 0
         ? <EmptyState
-            title={filter === 'pending' ? 'Nothing waiting for you' : 'No actions yet'}
-            description='Ask in a chat, for example "open a Jira ticket to add monitoring for the payment queue", and the card shows up here.'
-            action={<Button variant="secondary" onClick={() => go('/')}>Start a chat</Button>}
+            title={filter === 'pending' ? 'No pending actions' : 'No actions yet'}
+            description="Actions requested in a chat appear here."
+            action={<Button variant="secondary" onClick={() => go('/')}>New chat</Button>}
           />
         : <div className={s.cards}>{list.map(a => <ActionCard key={a.id} card={a} chatLink />)}</div>)}
     </Page>

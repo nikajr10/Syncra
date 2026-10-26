@@ -35,7 +35,7 @@ export function Shell({ me, hash, chatId, children }: { me: Me; hash: string; ch
         <a href="#/" className={s.newChat}><Plus size={16} strokeWidth={1.75} aria-hidden="true" />New chat</a>
 
         <nav className={s.chatList} aria-label="Chats">
-          {chats.length === 0 && <p className={s.muted}>Your chats will show up here.</p>}
+          {chats.length === 0 && <p className={s.muted}>No chats yet</p>}
           {chats.map(c => (
             <a key={c.id} href={`#/chat/${c.id}`} className={s.navItem} aria-current={chatId === c.id ? 'page' : undefined}>
               <span className={s.navLabel}>{c.title || 'Untitled chat'}</span>

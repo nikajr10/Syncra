@@ -18,16 +18,16 @@ from app.core.security import new_token, token_digest, verify_password
 from app.db.models import AuthToken, User, UserSourceIdentity
 from app.schemas.auth import Account, Login, Me, Token
 
-router = APIRouter(tags=["Login"])
+router = APIRouter(tags=["Auth"])
 
 
 @router.post(
     "/auth/login",
-    summary="Log in",
+    summary="Login",
     responses={401: {"description": "Wrong username or password"}},
 )
 def login(body: Login, session: DB) -> Token:
-    """Check the username and password and hand out a token that works for TOKEN_TTL_HOURS."""
+    """Returns a bearer token valid for TOKEN_TTL_HOURS."""
     user = session.scalar(select(User).where(User.username == body.username.strip().lower()))
     if not verify_password(body.password, user.password_hash if user else None):
         raise HTTPException(401, "Wrong username or password")
@@ -39,17 +39,16 @@ def login(body: Login, session: DB) -> Token:
     return Token(token=token, expires_at=expires_at)
 
 
-@router.post("/auth/logout", status_code=204, summary="Log out", responses=UNAUTHORIZED)
+@router.post("/auth/logout", status_code=204, summary="Logout", responses=UNAUTHORIZED)
 def logout(credentials: Credentials, _: CurrentUser, session: DB) -> None:
-    """The token stops working at once."""
+    """Revokes the current token."""
     token_hash = token_digest(credentials.credentials)
     session.execute(delete(AuthToken).where(AuthToken.token_hash == token_hash))
     session.commit()
 
 
-@router.get("/me", summary="Who am I?", responses=UNAUTHORIZED)
+@router.get("/me", summary="Current user", responses=UNAUTHORIZED)
 def me(user: CurrentUser, session: DB) -> Me:
-    """Who is logged in, and the accounts an admin linked to them."""
     accounts = session.scalars(
         select(UserSourceIdentity)
         .where(UserSourceIdentity.user_id == user.id)

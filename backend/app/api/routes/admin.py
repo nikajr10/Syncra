@@ -40,7 +40,7 @@ NOT_FOUND = {404: {"description": "No such source or user"}}
 
 
 router = APIRouter(
-    prefix="/admin", tags=["Admin"], responses={**UNAUTHORIZED, **FORBIDDEN},
+    prefix="/admin", responses={**UNAUTHORIZED, **FORBIDDEN},
     dependencies=[Depends(require_admin)],
 )  # fmt: skip
 
@@ -70,7 +70,7 @@ def _source(session: Session, source_id: int) -> Source:
     return source
 
 
-@router.get("/sources", response_model=Sources, summary="List sources and their sync status")
+@router.get("/sources", response_model=Sources, tags=["Sources"], summary="List sources")
 def sources(session: DB) -> Sources:
     rows = session.scalars(select(Source).order_by(Source.kind, Source.name)).all()
     return Sources(tools=configured_tools(), sources=[_view(session, s) for s in rows])
@@ -79,10 +79,10 @@ def sources(session: DB) -> Sources:
 BAD_ID = {422: {"description": "Not a valid id for that tool"}}
 
 
-@router.post("/sources", status_code=201, response_model=SourceView, summary="Add a source",
+@router.post("/sources", status_code=201, response_model=SourceView, tags=["Sources"],
+             summary="Create source",
              responses={409: {"description": "Already added"}, **BAD_ID})  # fmt: skip
 def add_source(body: NewSource, session: DB) -> SourceView:
-    """Connect a repo, project or channel. It syncs with the next learning run."""
     if not EXTERNAL_ID[body.kind].fullmatch(body.external_id):
         raise HTTPException(422, f"That doesn't look like a {body.kind} id")
     taken = select(Source.id).where(
@@ -98,10 +98,10 @@ def add_source(body: NewSource, session: DB) -> SourceView:
     return _view(session, source)
 
 
-@router.patch("/sources/{source_id}", response_model=SourceView, summary="Pause or resume a source",
-              responses=NOT_FOUND)  # fmt: skip
+@router.patch("/sources/{source_id}", response_model=SourceView, tags=["Sources"],
+              summary="Update source", responses=NOT_FOUND)  # fmt: skip
 def change_source(source_id: int, body: SourceChange, session: DB) -> SourceView:
-    """A paused source isn't synced; what was learned from it stays searchable."""
+    """Pause or resume syncing."""
     source = _source(session, source_id)
     source.enabled = body.enabled
     session.commit()
@@ -123,20 +123,19 @@ def _sync(source_id: int) -> None:
 
 
 @router.post("/sources/{source_id}/sync", status_code=202, response_model=SourceView,
-             summary="Sync a source now", responses=NOT_FOUND)  # fmt: skip
+             tags=["Sources"], summary="Sync source", responses=NOT_FOUND)  # fmt: skip
 def sync_now(
     source_id: int,
     session: DB,
     background: BackgroundTasks,
 ) -> SourceView:
-    """Fetch its new items now, after this answer; watch `last_synced_at` and `last_error` in
-    *List sources*. The worker learns from them on its next run."""
+    """Runs in the background; check `last_synced_at` and `last_error` in *List sources*."""
     source = _source(session, source_id)
     background.add_task(_sync, source.id)
     return _view(session, source)
 
 
-@router.get("/users", response_model=list[UserView], summary="List users and their accounts")
+@router.get("/users", response_model=list[UserView], tags=["Users"], summary="List users")
 def users(session: DB) -> list[UserView]:
     links: dict[int, list[Account]] = {}
     for i in session.scalars(select(UserSourceIdentity).order_by(UserSourceIdentity.id)):
@@ -148,10 +147,9 @@ def users(session: DB) -> list[UserView]:
 
 
 @router.post("/users/{username}/accounts", status_code=201, response_model=Account,
-             summary="Link an account to a user", responses={**NOT_FOUND, **BAD_ID})  # fmt: skip
+             tags=["Users"], summary="Link account", responses={**NOT_FOUND, **BAD_ID})  # fmt: skip
 def add_account(username: str, body: NewAccount, session: DB) -> Account:
-    """Link a GitHub login, Jira accountId or Slack member id: it decides what the user may
-    search. An account already linked to someone else is refused."""
+    """GitHub login, Jira accountId or Slack member ID. An account belongs to one user."""
     try:
         linked = link_account(session, username, body.tool, body.account_id, body.display_name)
     except ValueError as exc:
@@ -161,10 +159,9 @@ def add_account(username: str, body: NewAccount, session: DB) -> Account:
                    display_name=linked.display_name)  # fmt: skip
 
 
-@router.get("/status", response_model=Status, summary="See what went wrong")
+@router.get("/status", response_model=Status, tags=["Status"], summary="System status")
 def status(session: DB, limit: int = 50) -> Status:
-    """Items by status, every source's last sync and error, and the latest events: failed syncs
-    and learning runs, model errors and answers slower than SLOW_ANSWER_SECONDS."""
+    """Item counts by status, source sync state and the latest error events."""
     counts = dict(session.execute(select(Item.status, func.count()).group_by(Item.status)).all())
     rows = session.scalars(select(Source).order_by(Source.kind, Source.name)).all()
     events = session.scalars(

@@ -15,9 +15,9 @@ import { toolOptions } from '@/lib/format'
 import s from './admin.module.css'
 
 const ACCOUNT_HINT: Record<Tool, string> = {
-  github: 'Their GitHub login, like alice-chen',
-  jira: 'Their Jira accountId, from their Jira profile URL',
-  slack: 'Their Slack member id, like U0123ABCD (profile, more, copy member id)',
+  github: 'GitHub username, e.g. alice-chen',
+  jira: 'Jira accountId, from the profile URL',
+  slack: 'Slack member ID, e.g. U0123ABCD',
 }
 
 export default function PeoplePage() {
@@ -25,10 +25,10 @@ export default function PeoplePage() {
   const [linking, setLinking] = useState<UserView | null>(null)
 
   return (
-    <Page title="People" lead="Linked accounts decide what each person can search: they only see the repos, projects and channels their accounts can see.">
-      {error && <Alert tone="danger" title="People didn't load">{error.message}</Alert>}
+    <Page title="People">
+      {error && <Alert tone="danger" title="Failed to load people">{error.message}</Alert>}
       {!data && !error && <Skeleton lines={4} />}
-      {data?.length === 0 && <EmptyState title="No people yet" description="Create users with make add-user in backend/." />}
+      {data?.length === 0 && <EmptyState title="No users" description="Create users with make add-user." />}
       {data && data.length > 0 && (
         <ul className={s.list} aria-label="People">
           {data.map(u => (
@@ -40,7 +40,7 @@ export default function PeoplePage() {
                   {u.is_admin && <Badge tone="info" size="sm">Admin</Badge>}
                 </div>
                 <div className={s.accounts}>
-                  {u.accounts.length === 0 && <span className={s.warn}>No linked accounts, so they can't search anything yet</span>}
+                  {u.accounts.length === 0 && <span className={s.warn}>No linked accounts</span>}
                   {u.accounts.map(a => (
                     <span key={`${a.tool}:${a.id}`} className={s.account} title={a.display_name ?? undefined}>
                       <BrandIcon tool={a.tool} size={14} />{a.id}
@@ -76,12 +76,12 @@ function LinkAccount({ user, onClose }: { user: UserView | null; onClose: () => 
 
   return (
     <Dialog open={!!user} onOpenChange={o => { if (!o) { onClose(); link.reset() } }}>
-      <DialogContent title={`Link an account to ${user?.display_name || user?.username || ''}`} description="An account can belong to one person only. Linking the same account again renames it.">
+      <DialogContent title={`Link an account to ${user?.display_name || user?.username || ''}`} description="An account can be linked to one user only.">
         <form className={s.form} onSubmit={submit}>
           <Select label="Tool" options={toolOptions} value={tool} onValueChange={v => setTool(v as Tool)} />
           <Input label="Account id" description={ACCOUNT_HINT[tool]} name="account_id" required autoComplete="off" spellCheck={false} />
-          <Input label="Display name" description="Optional. How the account shows up in answers." name="display_name" autoComplete="off" />
-          <Alert tone="danger" title="Couldn't link it" open={link.isError}>{link.error?.message}</Alert>
+          <Input label="Display name" description="Optional" name="display_name" autoComplete="off" />
+          <Alert tone="danger" title="Failed to link account" open={link.isError}>{link.error?.message}</Alert>
           <div className={s.formActions}>
             <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>
             <Button type="submit" variant="primary" loading={link.isPending}>Link account</Button>

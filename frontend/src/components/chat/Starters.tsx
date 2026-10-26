@@ -12,7 +12,7 @@ export function Starters({ suggested, onAsk, onDraft }: { suggested: Suggestions
   const { questions, ticket_project: project } = suggested
   if (!questions.length && !project) return (
     <p className={s.noSuggestions}>
-      Nothing to suggest yet: Syncra hasn't learned anything you can see. Ask anyway, or ask an admin to link your GitHub, Jira and Slack accounts.
+      No suggestions yet.
     </p>
   )
   return (
@@ -24,7 +24,7 @@ export function Starters({ suggested, onAsk, onDraft }: { suggested: Suggestions
       ))}
       {project && (
         <button type="button" className={s.starter} onClick={() => onDraft(`Open a Jira ticket in ${project} to `)}>
-          <span>Open a Jira ticket in {project}…<span className={s.starterNote}>You finish the sentence, then approve the card</span></span>
+          <span>Create a Jira ticket in {project}…</span>
           <PenLine size={16} strokeWidth={1.75} aria-hidden="true" />
         </button>
       )}

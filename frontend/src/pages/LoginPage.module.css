@@ -19,13 +19,8 @@
 
 .title { font-family: var(--font-display); font-size: var(--text-2xl); letter-spacing: var(--tracking-display); line-height: var(--leading-display); }
 
-.lead { margin-top: var(--space-2); color: var(--text-secondary); font-size: var(--text-base); }
-
 .form { display: flex; flex-direction: column; gap: var(--space-4); margin-top: var(--space-8); }
 .form > button { width: 100%; }
-
-.footnote { margin-top: var(--space-6); color: var(--text-secondary); font-size: var(--text-xs); }
-.footnote code { font-size: inherit; color: var(--foreground); white-space: nowrap; }
 
 @media (max-width: 480px) {
   .card { padding: var(--space-6); border: 0; box-shadow: none; background: transparent; }

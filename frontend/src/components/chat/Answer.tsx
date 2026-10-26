@@ -22,9 +22,9 @@ export function Answer({ turn, onAsk, canAsk, retry }: { turn: Turn; onAsk: (q: 
   const [allSources, setAllSources] = useState(false)
 
   if (turn.error) return (
-    <Alert tone="danger" title="No answer this time">
+    <Alert tone="danger" title="Request failed">
       {turn.error}
-      {retry && <div className={s.retry}><Button size="sm" variant="secondary" onClick={retry}>Ask again</Button></div>}
+      {retry && <div className={s.retry}><Button size="sm" variant="secondary" onClick={retry}>Retry</Button></div>}
     </Alert>
   )
   if (turn.path === 'blocked') return (
@@ -34,7 +34,7 @@ export function Answer({ turn, onAsk, canAsk, retry }: { turn: Turn; onAsk: (q: 
     </div>
   )
   if (turn.streaming && !turn.content) return (
-    <div className={s.answer} aria-live="polite"><p className={s.metaText}>Searching your team's memory…</p></div>
+    <div className={s.answer} aria-live="polite"><p className={s.metaText}>Searching…</p></div>
   )
 
   const shown = allSources ? sources : sources.slice(0, 3)

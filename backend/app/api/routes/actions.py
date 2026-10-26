@@ -32,16 +32,16 @@ def _pending(session: DB, user: CurrentUser, action_id: int) -> Action:
     return action
 
 
-@router.get("", response_model=list[Card], summary="List my actions")
+@router.get("", response_model=list[Card], summary="List actions")
 def my_actions(user: CurrentUser, session: DB) -> Sequence[Action]:
-    """Your actions, newest first."""
+    """Newest first."""
     return session.scalars(
         select(Action).where(Action.user_id == user.id).order_by(Action.id.desc())
     ).all()
 
 
 @router.post(
-    "/{action_id}/approve", response_model=Card, summary="Approve and run an action",
+    "/{action_id}/approve", response_model=Card, summary="Approve action",
     responses={**NOT_FOUND, **SETTLED},
 )  # fmt: skip
 def approve(
@@ -49,15 +49,13 @@ def approve(
     user: CurrentUser,
     session: DB,
 ) -> Action:
-    """Run a pending action with your permissions. `status` ends as `done` with the result
-    (the new ticket's key and link) or `failed` with the error."""
+    """Runs the action. `status` becomes `done` (with the result) or `failed` (with the error)."""
     return actions.approve(session, _pending(session, user, action_id), user)
 
 
 @router.post(
-    "/{action_id}/reject", response_model=Card, summary="Reject an action",
+    "/{action_id}/reject", response_model=Card, summary="Reject action",
     responses={**NOT_FOUND, **SETTLED},
 )  # fmt: skip
 def reject(action_id: int, user: CurrentUser, session: DB) -> Action:
-    """Drop a pending action: nothing is run."""
     return actions.reject(session, _pending(session, user, action_id), user)
