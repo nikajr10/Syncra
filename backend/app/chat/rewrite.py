@@ -52,7 +52,7 @@ def rewrite(
     prompt = get_prompt("question_rewriter")
     user = Template(prompt.prompt).substitute(history=text, message=TAG.sub("", message))
     try:
-        reply = (client or gateway.ollama()).generate(
+        reply = (client or gateway.chat_ollama()).generate(
             "question_rewriter", user, system=prompt.system, json_mode=SCHEMA
         )
         question = Rewritten.model_validate_json(reply).question

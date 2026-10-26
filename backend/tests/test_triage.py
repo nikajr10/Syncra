@@ -36,6 +36,21 @@ def test_rules_catch_empty_items_and_bots_but_not_bot_threads() -> None:
     assert not triage.is_obvious_noise(_item("thanks!"))  # left to the classifier
 
 
+def test_review_verdicts_are_kept_without_the_classifier() -> None:
+    reviews = [_item("approved: LGTM", "review", "github:bob"),
+               _item("changes requested: add a test", "review", "github:bob"),
+               _item("approved", "review", "github:renovate[bot]"),
+               _item("commented: nit", "review", "github:bob")]  # fmt: skip
+    asked: list[str] = []
+
+    def classify(texts: list[str]) -> list[str]:
+        asked.extend(texts)
+        return ["noise"] * len(texts)
+
+    assert triage.triage(reviews, classify) == ["useful", "useful", "noise", "noise"]
+    assert asked == ["commented: nit"]  # verdicts and bots never reach the classifier
+
+
 def test_triage_marks_noise_and_skips_it(db_session: Session) -> None:
     source = Source(kind="slack", name="#eng", external_id="C1")
     db_session.add(source)

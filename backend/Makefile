@@ -1,5 +1,5 @@
 .PHONY: install run worker test lint fmt pull-models download-models train-triage db-init migrate \
-	train-intent-router add-user link-account
+	train-intent-router add-user link-account demo eval
 
 PYTHON ?= python3.12
 
@@ -46,3 +46,9 @@ add-user:
 
 link-account:
 	.venv/bin/python scripts/users.py link
+
+demo:
+	.venv/bin/python scripts/demo.py
+
+eval:
+	.venv/bin/python scripts/evaluate.py

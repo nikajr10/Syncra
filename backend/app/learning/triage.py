@@ -1,6 +1,7 @@
 """Triage (Task 2.2): keep useful items, drop noise, before chunking.
 
-A rule pre-filter catches obvious noise (nothing to read, written by a bot); the SetFit classifier
+A rule pre-filter catches obvious noise (nothing to read, written by a bot) and keeps PR reviews
+with a verdict ("approved: LGTM" says who reviewed what, however short); the SetFit classifier
 trained on config/triage.yaml (`make train-triage`) decides the rest. Noise gets status "noise"
 and is skipped by later stages; useful items stay "new" for the chunker.
 """
@@ -36,10 +37,18 @@ def is_obvious_noise(item: Item) -> bool:
     return not item.full_text or (is_bot(item.author) and item.type != "thread")
 
 
+def is_review_verdict(item: Item) -> bool:
+    """A person approving or asking for changes on a PR: evidence for "who reviewed …?"."""
+    verdict = item.text.lower().startswith(("approved", "changes requested"))
+    return item.type == "review" and verdict and not is_bot(item.author)
+
+
 def triage(items: Sequence[Item], classify: Classify = _model) -> list[str]:
-    """Label each item "useful" or "noise": the rule pre-filter first, then the classifier."""
-    labels = ["noise"] * len(items)
-    keep = [n for n, item in enumerate(items) if not is_obvious_noise(item)]
+    """Label each item "useful" or "noise": the rules first, then the classifier."""
+    labels = ["useful" if is_review_verdict(item) else "noise" for item in items]
+    keep = [
+        n for n, item in enumerate(items) if labels[n] == "noise" and not is_obvious_noise(item)
+    ]
     for n, label in zip(keep, classify([items[n].full_text for n in keep]), strict=True):
         labels[n] = label
     return labels

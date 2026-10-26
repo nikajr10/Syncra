@@ -23,6 +23,10 @@ def build_connector(source: Source) -> Connector:
     pattern = EXTERNAL_ID.get(source.kind)
     if pattern and not pattern.fullmatch(source.external_id):
         raise ValueError(f"invalid {source.kind} external_id {source.external_id!r}")
+    if (source.config or {}).get("demo"):  # make demo: the fictional company, no real API
+        from app.learning.connectors.demo import DemoConnector
+
+        return DemoConnector(source)
     if source.kind == "github":
         from app.learning.connectors.github import GitHubConnector
 

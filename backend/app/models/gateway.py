@@ -77,6 +77,7 @@ class OllamaClient:
             "prompt": prompt,
             "stream": stream,
             "think": think,  # Qwen3 "thinking" off by default: faster, and JSON stays clean
+            "keep_alive": get_settings().ollama_keep_alive,  # reloading qwen3:8b costs seconds
         }
         if system:
             body["system"] = system
@@ -172,6 +173,12 @@ class OllamaClient:
 @lru_cache
 def ollama() -> OllamaClient:
     return OllamaClient()
+
+
+@lru_cache
+def chat_ollama() -> OllamaClient:
+    """For the chat's calls: CHAT_TIMEOUT_SECONDS and one retry, since a user is waiting."""
+    return OllamaClient(timeout=get_settings().chat_timeout_seconds, retries=1)
 
 
 # --- Hugging Face ---------------------------------------------------------------------------
@@ -428,3 +435,30 @@ def train_setfit_held_out(role: str) -> float:
     hits = sum(p == y for p, y in zip(classify(role, x_test), y_test, strict=True))
     log.info("setfit:%s trained on %d, %d/%d held-out right", role, len(x_train), hits, len(y_test))
     return hits / len(y_test)
+
+
+def warm_up() -> None:
+    """Load every model a chat message needs, so the first question isn't the slow one: the
+    Hugging Face models into memory, the Ollama ones into Ollama (an empty prompt loads a model
+    without generating). A model that can't load is logged and left for the first message."""
+    from app.config.settings import get_models_config
+
+    started = time.perf_counter()
+    loaders = {
+        "embedder": load_sentence_transformer, "reranker": load_cross_encoder,
+        "claim_checker": load_cross_encoder, "intent_router": load_setfit,
+        "prompt_guard": load_classifier,
+    }  # fmt: skip
+    for role, load in loaders.items():
+        try:
+            load(role)
+        except Exception as exc:  # e.g. Prompt Guard without HF_TOKEN
+            log.warning("warm-up: %s not loaded: %s", role, exc)
+    client = chat_ollama()
+    for name in {get_models_config()[r].name for r in ("question_rewriter", "answer_writer")}:
+        try:
+            body = {"model": name, "keep_alive": get_settings().ollama_keep_alive}
+            client._client.post("/api/generate", json=body).raise_for_status()
+        except httpx.HTTPError as exc:
+            log.warning("warm-up: Ollama model %s not loaded: %s", name, exc)
+    _log_call("warm-up", started)

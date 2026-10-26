@@ -478,6 +478,24 @@ Code-level details are in [`progress.md`](progress.md), and how the parts work t
 
 ---
 
+## 26. Quality and launch
+
+**A fictional company to demo and measure on.** Acme Pay has two teams with private repos, Jira projects and Slack channels, so the demo also shows permissions. Its data goes through the real learning pipeline instead of being written straight into the tables, so the demo shows what Syncra really learns. Its sources are marked as demo sources and never reach a real API.
+
+**66 evaluation questions, measured end to end.** The runner asks each as its user and checks the evidence, the leaks, the citations, the removed claims and the "I don't know"s. Its first run found four real problems that the unit tests had missed, all fixed: Jira keys weren't searchable, approving reviews were thrown away as noise, the claim checker was far too strict, and the answer writer added explanations of its own.
+
+**The claim checker reads evidence the way the NLI model likes it.** The header became a sentence, claims citing two pieces are checked against both together, long threads are also read two sentences at a time, and an unsupported ", which …" tail is cut instead of deleting the whole sentence. Removed claims fell from 36% to 14%, and wrongly empty answers from 8 to 2, while every unanswerable question still got "I don't know".
+
+**Evidence shows people's names.** Accounts an admin linked get the person's name next to them (`Carol Okafor (github:carol-ok)`), so answers name people and the checker can match "Carol" to her review.
+
+**Leak tests check the prompt, not just the reply.** A private chunk reaching the LLM is a leak even if the model doesn't repeat it, so the tests look at what Ollama would have read. They found that `password=hunter2` slipped past the scrubber; short unquoted passwords are masked now.
+
+**Problems are stored in the database for admins.** Failed syncs and learning runs, model errors and slow answers go into an `events` table that `GET /admin/status` shows. The API and the worker are separate processes, and one database is the rule, so no log service was added.
+
+**The first word takes 3.5 to 4 seconds, not under 3.** Model warm-up removed the 8 to 19 second first question; what's left is qwen3:8b reading the evidence. `timing.md` lists the options: qwen3:4b for answers, fewer pieces of evidence, or Ollama's flash attention.
+
+---
+
 ## Decisions still waiting for you
 
 **A bigger GLiNER model?** The small one mixes up services and tools and tags some junk as people. `gliner_medium-v2.1` or `gliner_large-v2.1` may do better, at some cost in speed.
@@ -491,5 +509,7 @@ Code-level details are in [`progress.md`](progress.md), and how the parts work t
 **Graph search without GLiNER?** Names in a question are found by alias lookup only (section 23). Say if you want GLiNER run on questions as your design describes.
 
 **Per-user Jira sign-in for actions?** Tickets are created with the shared Jira account today (section 25).
+
+**Answer with qwen3:4b to meet the 3-second target?** See `timing.md`: it would roughly halve the time to the first word, at some cost in answer quality that `make eval` can measure.
 
 **Whether internal IP addresses should stay hidden.** Hiding them is safer, but can blank out useful infrastructure details in answers.

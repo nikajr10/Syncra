@@ -5,10 +5,85 @@ Live record of what has been built. Agents add an entry here after every task (f
 ## Current status
 
 - **Current phase:** Phase 10 — Quality and launch
-- **Next task:** 10.1 — Demo data, 10.2, 10.4, 10.6
-- **Completed tasks:** 0.1–0.6, 1.1–1.6, 2.1–2.3, 3.1–3.4, 4.1–4.4, 5.1–5.3, 5.5, 5.6, 6.1–6.5, 7.1–7.5, 8.1–8.2, 9.4 backend, 10.3, 10.5 (5.4 real model waits for HF_TOKEN; 9.1–9.3 frontend kept as is)
+- **Next task:** 10.6 — Final docs
+- **Completed tasks:** 0.1–0.6, 1.1–1.6, 2.1–2.3, 3.1–3.4, 4.1–4.4, 5.1–5.3, 5.5, 5.6, 6.1–6.5, 7.1–7.5, 8.1–8.2, 9.4 backend, 10.1–10.3, 10.4 (target partly met), 10.5 (5.4 real model waits for HF_TOKEN; 9.1–9.3 frontend kept as is)
 
 ## Log
+
+### Task 10.4 — Speed tuning  ⚠️ partly done
+**Date:** 2026-10-26
+
+**Built**
+- `timing.md`: the timing report (stage by stage on the demo, where the first-word time goes, what was tuned, how to close the gap).
+- Model warm-up when the API starts (`gateway.warm_up()`, in a background thread; `WARM_UP=true`): embedder, reranker, claim checker, intent router, prompt guard (if it can load), and qwen3:4b / qwen3:8b in Ollama. The first question no longer takes 8–19 s.
+- `OLLAMA_KEEP_ALIVE` (30m) sent with every Ollama call, so qwen3:8b stays loaded between questions.
+- `gateway.chat_ollama()`: the chat's calls (rewriter, answer writer, action planner) use `CHAT_TIMEOUT_SECONDS` (30) and one retry instead of the worker's 120 s × 3 (the 5.3 TODO).
+- Stage timings per reply come from Task 10.5's logging.
+- Test: warm-up loads every chat model, survives one failing (the gated guard), and loads both Ollama models with keep-alive.
+
+**Key files**
+- `timing.md`, `backend/app/models/gateway.py`, `backend/app/api/main.py`, `backend/app/config/settings.py`, `backend/app/chat/{rewrite,answer,actions}.py`, `backend/tests/test_gateway.py`
+
+**Decisions**
+- No model swap: qwen3:4b for answers would likely meet the target but `description.md` names qwen3:8b; it is the user's call (in `timing.md`).
+- HNSW left at its defaults: filtered vector search takes milliseconds on the demo data.
+
+**How to run / test**
+- `make demo` then `make eval` prints time per stage · `make test`
+
+**Known issues / TODO**
+- **Target not met: first word ≈ 3.5–4 s** (search ≈ 0.2 s + qwen3:8b reading a 1,000–1,700-token prompt at ~420 tokens/s on an M2 Pro). Options: qwen3:4b for answers, `TOP_K_EVIDENCE=5`, `OLLAMA_FLASH_ATTENTION=1`, a faster GPU.
+
+### Task 10.2 — Evaluation set and runner  ✅ done
+**Date:** 2026-10-26
+
+**Built**
+- `backend/demo/eval.yaml`: 66 questions on the demo company: 50 answerable (why-questions, exact ids like PAY-131 and E4012, who-reviewed / who-decided questions, follow-ups phrased standalone) with the items holding the answer and a reference answer; 7 whose answer isn't in the data; 9 permission questions where a user asks about the other team's private items (`hidden`: must never appear), plus the same questions asked by someone allowed.
+- `scripts/evaluate.py` / `make eval`: asks each question as its user through the real search, answer writer and claim checker, then prints: right source in top 8, leaks of hidden items, citations backed by their evidence, answers citing a right source, the unsupported-claim rate, "I don't know" when it should and when it shouldn't, time per stage, and the questions to look at. `--search-only` skips the LLM.
+- What the first runs found, and the fixes (each with tests):
+  - Jira keys weren't in the indexed text, so "What does PAY-131 say?" found nothing: an issue's or PR's text now starts with its reference (`Item.full_text`).
+  - Triage dropped approving reviews ("approved: LGTM") as noise, so "who reviewed …?" lost its evidence: reviews with a verdict by a person are always kept.
+  - The claim checker removed 36% of claims, emptying 8 good answers. Fixed: the premise header is a sentence (`A review by … of "…".`), a citation's space no longer leaves "queue ." in the claim (entailment 0.96 → 0.25), claims citing several pieces are checked against them together, long pieces are also read two sentences at a time, an added ", which …" tail is cut when the rest holds, and evidence shows linked people's names (`Carol Okafor (github:carol-ok)`).
+  - The answer writer added explanations the evidence doesn't give: prompt `answer_writer.v2` asks for facts as the evidence states them.
+- **Scores on the final run:** right source in top 8: 50/50 (100%); leaks: 0; citations backed by their evidence: 79/92 (86%); answers citing a right source: 48/50 (96%); unsupported claims removed: 13/92 (14%); "I don't know" when it should: 16/16 (100%); "I don't know" despite having the answer: 2/50 (4%). First run, for comparison: 94% / 0 / 64% / 82% / 36% / 100% / 16%.
+
+**Key files**
+- `backend/demo/eval.yaml`, `backend/scripts/evaluate.py`, `backend/app/chat/check.py`, `backend/app/chat/search.py`, `backend/config/prompts/answer_writer.v2.yaml`, `backend/app/db/schema.py` (`full_text`), `backend/app/learning/triage.py`, tests in `test_answer.py`, `test_search.py`, `test_triage.py`
+
+**Decisions**
+- The runner skips guard, intent and rewriter (the questions stand alone): it measures retrieval and answers.
+- Prompt changes get a new version file (`answer_writer.v2`), v1 stays for comparison.
+
+**How to run / test**
+- `make demo`, then `make eval` (about 10 minutes) or `python scripts/evaluate.py --search-only` (seconds)
+
+**Known issues / TODO**
+- The 2 remaining misses: "Who reviewed the RabbitMQ queue PR?" and "Why did we choose Keycloak over Auth0?" end as "I don't know" because the checker rejects claims that need a small inference (a "changes requested" review read as "asked to add …").
+- 14% of claims are still removed; most are paraphrases the NLI model calls neutral. A larger NLI model (`nli-deberta-v3-large`) may do better, at about 3x the check time.
+- Existing installs: items learned before the `full_text` change keep their old chunks until they change; set their status to `new` to re-learn them.
+
+### Task 10.1 — Demo data  ✅ done
+**Date:** 2026-10-26
+
+**Built**
+- `backend/demo/company.yaml`: Acme Pay, a fictional payments company. 6 people (payments team alice, bob, carol; auth team dave, erin; PM frank) with GitHub, Slack and most with Jira accounts; 8 sources (private repos acme-pay/payments and acme-pay/auth, public acme-pay/docs, Jira PAY and AUTH, Slack #eng-payments, #eng-auth, #general) with their members; 72 items (PRs, reviews, comments, a commit, issues, threads, messages) about decisions with reasons and cross-references (RabbitMQ queue, refund retry cap, idempotency keys and E4012, gRPC billing, Postgres 16, webhooks, rate limits, a flaky test, Keycloak vs Auth0, key rotation, MkDocs, runbooks, owners), plus 7 noise items.
+- `app/learning/connectors/demo.py: DemoConnector`: serves a demo source's items as if synced; the cursor is the file's hash. `build_connector` hands it every source with `config.demo = true`, so demo sources never reach a real API.
+- `scripts/demo.py` / `make demo`: creates the users (one password, typed or `DEMO_PASSWORD`), links their accounts with display names, adds the sources, and runs one learning run. Re-running changes nothing unless the file changed.
+- `tests/test_demo.py`: every demo source yields its items with the right tags and members, once.
+- Loaded into a separate `syncra_demo` database with the real models: 2 min 49 s, 36 conversations learned, 33 decisions, nothing failed. The chat answers the demo questions (see Task 10.2).
+
+**Key files**
+- `backend/demo/company.yaml`, `backend/app/learning/connectors/demo.py`, `backend/app/learning/connectors/__init__.py`, `backend/scripts/demo.py`, `backend/Makefile`, `backend/tests/test_demo.py`, `README.md` (Demo)
+
+**Decisions**
+- The demo goes through the real pipeline (scrubber, triage, GLiNER, the decision reader, the embedder), not straight into the tables, so it shows what Syncra really learns.
+- Demo users are real users with a password; the README says to load the demo into its own database and never in production.
+
+**How to run / test**
+- `make demo` (Ollama running, `make train-triage` and `make train-intent-router` done) · `make test`
+
+**Known issues / TODO**
+- The dev database `syncra` was left untouched; the demo was loaded into `syncra_demo` for the evaluation.
 
 ### Task 10.5 — Monitoring and logs  ✅ done
 **Date:** 2026-10-26

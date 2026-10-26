@@ -1,11 +1,14 @@
 """Claim checker (Task 7.3): every claim of an answer is checked against the evidence it cites.
 
 The answer is split into claims (sentences, and list items), each with the `[E#]` it cites.
-The DeBERTa NLI model (`claim_checker`) reads each cited piece of evidence (header + text) as
-the premise and the claim as the hypothesis; the claim is supported when one of them entails it
-with at least the role's `threshold`. A claim citing nothing is checked against all evidence and
-gets the citation of the piece that supports it. Unsupported claims are removed. Sentences
-that only say what isn't known ("I don't know …") make no claim and stay.
+The DeBERTa NLI model (`claim_checker`) reads each cited piece of evidence (`Evidence.premise`)
+as the premise and the claim as the hypothesis, and all the cited pieces together when a claim
+cites several (a claim may join two facts); the claim is supported when one of them entails it
+with at least the role's `threshold`. Each piece is read whole and in windows of two sentences.
+A claim citing nothing is checked against all evidence and gets the citation of the piece that
+supports it. An unsupported sentence ending in an added explanation (", which …", ", making …")
+is checked again without it, and kept that way if it holds. Unsupported claims are removed.
+Sentences that only say what isn't known ("I don't know …") make no claim and stay.
 
 `confidence` (Task 7.4) labels the checked answer high, medium or low.
 """
@@ -22,7 +25,10 @@ from app.config.settings import get_models_config, get_settings
 from app.models import gateway
 
 CITATION = re.compile(r"\[(E\d+(?:\s*,\s*E\d+)*)\]")
+CITED = re.compile(r"\s*" + CITATION.pattern)  # with the space before it: "queue ." reads badly
 SENTENCE = re.compile(r"(?<=[.!?])\s+(?=\S)")
+# ", which means …", ", making it …": an explanation the writer added, often unsupported
+TAIL = re.compile(r",\s+(?:which|making|meaning|so that|thereby|ensuring|allowing)\b", re.I)
 HEDGE = re.compile(
     r"\b(?:don'?t|do not|doesn'?t|does not|can'?t|cannot) (?:know|say|mention|tell|find)\b"
     r"|\bno (?:evidence|information)\b",
@@ -53,39 +59,73 @@ def _labels(sentence: str) -> tuple[str, ...]:
     return tuple(dict.fromkeys(found))
 
 
+def premises(e: Evidence) -> list[str]:
+    """The whole piece, and windows of two sentences of it: the NLI model misses a fact in the
+    middle of a long Slack thread that it finds in the line saying it."""
+    sentences = [s for line in e.text.splitlines() for s in SENTENCE.split(line.strip()) if s]
+    header = e.premise.split("\n", 1)[0]
+    windows = [" ".join(sentences[i : i + 2]) for i in range(len(sentences) - 1)]
+    return [e.premise, *(f"{header}\n{w}" for w in windows if len(sentences) > 2)]
+
+
+def _entailment(
+    claims: Sequence[tuple[str, Sequence[str]]], by_label: dict[str, list[str]]
+) -> list[dict[str, float]]:
+    """For each (claim, labels to check it against): the best entailment per label."""
+    pairs, owners = [], []
+    for n, (claim, labels) in enumerate(claims):
+        for label in labels:
+            pairs += [(premise, claim) for premise in by_label[label]]
+            owners += [(n, label)] * len(by_label[label])
+        if len(labels) > 1:  # the facts may be spread over the pieces it cites
+            pairs.append(("\n\n".join(by_label[label][0] for label in labels), claim))
+            owners.append((n, labels[0]))
+    scores: list[dict[str, float]] = [{} for _ in claims]
+    for (n, label), p in zip(owners, gateway.nli("claim_checker", pairs), strict=True):
+        scores[n][label] = max(scores[n].get(label, 0.0), p.get("entailment", 0.0))
+    return scores
+
+
 def check(answer: str, evidence: Sequence[Evidence]) -> Checked:
     """`answer` with every claim its evidence doesn't support removed."""
-    by_label = {e.label: f"{e.header}\n{e.text}" for e in evidence}
+    by_label = {e.label: premises(e) for e in evidence}
+    threshold = get_models_config()["claim_checker"].threshold
     lines = [[s for s in SENTENCE.split(line.strip()) if s] for line in answer.splitlines()]
     sentences = [s for line in lines for s in line]
 
-    pairs, owners = [], []  # (premise, claim) to check, and the sentence each belongs to
-    for n, sentence in enumerate(sentences):
-        if HEDGE.search(sentence) and not CITATION.search(sentence):
-            continue
-        claim = CITATION.sub("", sentence).strip().lstrip("-*• ")
-        for label in _labels(sentence) or tuple(by_label):  # uncited: any evidence may support it
-            if label in by_label:
-                pairs.append((by_label[label], claim))
-                owners.append((n, label))
-    entailed: dict[int, dict[str, float]] = {}
-    for (n, label), p in zip(owners, gateway.nli("claim_checker", pairs), strict=True):
-        entailed.setdefault(n, {})[label] = p.get("entailment", 0.0)
-
-    threshold = get_models_config()["claim_checker"].threshold
-    claims, kept = [], set()
+    todo: dict[int, tuple[str, list[str]]] = {}  # sentence -> (claim, labels to check it with)
     for n, sentence in enumerate(sentences):
         cited = _labels(sentence)
         if HEDGE.search(sentence) and not cited:
+            continue
+        labels = [label for label in cited if label in by_label]  # a made-up label: none
+        todo[n] = (CITED.sub("", sentence).strip().lstrip("-*• "), labels if cited else [*by_label])
+    scores = dict(zip(todo, _entailment(list(todo.values()), by_label), strict=True))
+
+    heads = {}  # a failing sentence whose tail adds an explanation: try it without the tail
+    for n, (claim, labels) in todo.items():
+        tail = TAIL.search(claim)
+        if max(scores[n].values(), default=0.0) < threshold and tail:
+            heads[n] = (claim[: tail.start()] + ".", labels)
+    for (n, (head, _)), head_scores in zip(
+        heads.items(), _entailment(list(heads.values()), by_label), strict=True
+    ):
+        if max(head_scores.values(), default=0.0) >= threshold:
+            scores[n] = head_scores
+            cited = _labels(sentences[n])
+            sentences[n] = _cite(head, ", ".join(cited)) if cited else head
+
+    claims, kept = [], set()
+    for n, sentence in enumerate(sentences):
+        if n not in todo:  # a hedge: makes no claim
             claims.append(Claim(sentence, (), None, 0.0))
             kept.add(n)
             continue
-        scores = entailed.get(n, {})
-        best = max(scores, key=scores.get, default=None)
-        supported = best is not None and scores[best] >= threshold
+        cited, best = _labels(sentence), max(scores[n], key=scores[n].get, default=None)
+        supported = best is not None and scores[n][best] >= threshold
         if supported and not cited:  # true but uncited: cite what supports it
             cited, sentence = (best,), _cite(sentence, best)
-        claims.append(Claim(sentence, cited, supported, scores.get(best, 0.0) if best else 0.0))
+        claims.append(Claim(sentence, cited, supported, scores[n][best] if best else 0.0))
         if supported:
             kept.add(n)
             sentences[n] = sentence

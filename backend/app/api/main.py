@@ -1,4 +1,5 @@
 import logging
+import threading
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
@@ -61,6 +62,10 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     get_settings()
     get_models_config()
     setup_logging()
+    if get_settings().warm_up:  # in the background: the API answers at once
+        from app.models.gateway import warm_up
+
+        threading.Thread(target=warm_up, name="warm-up", daemon=True).start()
     yield
 
 

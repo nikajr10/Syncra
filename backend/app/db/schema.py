@@ -159,9 +159,15 @@ class Item(Base):
 
     @property
     def full_text(self) -> str:
-        """What triage and the chunker read: title (unless the text already has it), then text."""
-        if self.title and self.title not in self.text:
-            return f"{self.title}\n\n{self.text}".strip()
+        """What triage and the chunker read: title (unless the text already has it), then text.
+        An issue's or PR's title starts with its reference (`PAY-131 …`, `#42 …`), so keyword
+        search finds it by the id people quote."""
+        title = self.title or ""
+        ref = self.external_id or ""
+        if self.type in ("issue", "pr") and ref not in f"{title} {self.text}":
+            title = f"{ref} {title}".strip()
+        if title and title not in self.text:
+            return f"{title}\n\n{self.text}".strip()
         return self.text.strip()
 
 

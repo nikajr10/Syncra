@@ -76,7 +76,7 @@ def plan(
     prompt = get_prompt("action_planner")
     listed = ", ".join(f"{key} ({TAG.sub('', name)})" for key, name in projects.items())
     user = Template(prompt.prompt).substitute(projects=listed, request=TAG.sub("", request))
-    reply = (client or gateway.ollama()).generate(
+    reply = (client or gateway.chat_ollama()).generate(
         "action_planner", user, system=prompt.system, json_mode=SCHEMA
     )
     try:

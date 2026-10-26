@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     # --- services ---
     ollama_base_url: str = "http://localhost:11434"
     ollama_timeout_seconds: float = 120.0
+    chat_timeout_seconds: float = 30.0  # chat calls: a user is waiting, so give up sooner
+    ollama_keep_alive: str = "30m"  # how long Ollama keeps a model loaded after a call
+    warm_up: bool = True  # load the chat's models when the API starts, not on the first question
     hf_token: str | None = None  # only needed for gated Hugging Face models
     device: str = "auto"  # auto | cpu | mps | cuda — where Hugging Face models run
     trained_models_dir: Path = BACKEND_DIR / "trained_models"  # classifiers we train (SetFit)

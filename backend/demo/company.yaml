@@ -1,0 +1,707 @@
+# Demo company for `make demo` (Task 10.1). Fictional: every name, id and link is made up.
+# Acme Pay, a payments startup. Payments team: alice, bob, carol. Auth team: dave, erin.
+# frank is the product manager and sits in both teams.
+users:
+  alice:
+    name: Alice Chen
+    accounts: {github: alice-chen, slack: U01ALICE, jira: acc-alice}
+  bob:
+    name: Bob Martinez
+    accounts: {github: bobm, slack: U02BOB, jira: acc-bob}
+  carol:
+    name: Carol Okafor
+    accounts: {github: carol-ok, slack: U03CAROL, jira: acc-carol}
+  dave:
+    name: Dave Kim
+    accounts: {github: dave-kim, slack: U04DAVE, jira: acc-dave}
+  erin:
+    name: Erin Walsh
+    accounts: {github: erin-w, slack: U05ERIN}
+  frank:
+    name: Frank Rossi
+    accounts: {github: frank-pm, slack: U06FRANK, jira: acc-frank}
+
+sources:
+  # ---------------------------------------------------------------- GitHub: payments (private, payments team)
+  - kind: github
+    external_id: acme-pay/payments
+    name: acme-pay/payments
+    public: false
+    members: [github:alice-chen, github:bobm, github:carol-ok, github:frank-pm]
+    items:
+      - external_id: "#42"
+        type: pr
+        title: Add a RabbitMQ queue between checkout and payments
+        text: |
+          Checkout called the payments service synchronously, and our payment provider PayGate times out under load:
+          in the Feb 26 load test 8% of charges timed out after 30s at 400 rps and took checkout down with them.
+          This PR puts a RabbitMQ queue (payments.charge) between checkout and payments. Checkout publishes the order
+          and returns right away; payments-worker consumes it and calls PayGate. We picked RabbitMQ over Kafka because
+          platform already runs it and we peak at about 50 charges/s. Agreed with Frank in #eng-payments. Fixes PAY-118.
+        author: github:alice-chen
+        created_at: 2026-03-04T09:30:00Z
+        link: https://github.example/acme-pay/payments/pull/42
+      - external_id: review:4201
+        type: review
+        text: "approved: LGTM. Consumer prefetch of 20 looks right, we can tune it after the next load test."
+        author: github:bobm
+        created_at: 2026-03-04T13:10:00Z
+        parent_external_id: "#42"
+        link: https://github.example/acme-pay/payments/pull/42#pullrequestreview-4201
+      - external_id: review:4202
+        type: review
+        text: "changes requested: there is no dead-letter queue, so a message that keeps failing is retried forever and blocks the consumer."
+        author: github:carol-ok
+        created_at: 2026-03-04T14:02:00Z
+        parent_external_id: "#42"
+        link: https://github.example/acme-pay/payments/pull/42#pullrequestreview-4202
+      - external_id: review_comment:4203
+        type: comment
+        text: "payments_worker/consumer.py: please ack the message only after the charge row is committed, otherwise a crash between ack and commit loses the order."
+        author: github:carol-ok
+        created_at: 2026-03-04T14:05:00Z
+        parent_external_id: "#42"
+        link: https://github.example/acme-pay/payments/pull/42#discussion_r4203
+      - external_id: review:4204
+        type: review
+        text: "approved: dead-letter queue payments.charge.dlq is in and we ack after commit now. LGTM."
+        author: github:carol-ok
+        created_at: 2026-03-05T10:20:00Z
+        parent_external_id: "#42"
+        link: https://github.example/acme-pay/payments/pull/42#pullrequestreview-4204
+      - external_id: 7c3e9a1f5b2d48e6a0c4f8b19d2e7a3c5f1b6d90
+        type: commit
+        title: Merge pull request #42 from alice-chen/rabbitmq-queue
+        text: Merge pull request #42 from alice-chen/rabbitmq-queue. Add a RabbitMQ queue between checkout and payments, with dead-letter queue payments.charge.dlq.
+        author: github:alice-chen
+        created_at: 2026-03-05T11:00:00Z
+        link: https://github.example/acme-pay/payments/commit/7c3e9a1f5b2d48e6a0c4f8b19d2e7a3c5f1b6d90
+      - external_id: "#57"
+        type: pr
+        title: Cap refund retries at 3
+        text: |
+          The refund worker retried failed refunds forever with exponential backoff. Our acquiring bank, Northwind Bank,
+          flags a 4th refund attempt on the same transaction within 24 hours as possible fraud and freezes the merchant
+          account; that happened on March 28 and again on March 30. Alice decided on a hard cap of 3 retries (PAY-131).
+          After the 3rd failure the refund moves to the manual review queue and on-call is paged.
+          New constant MAX_REFUND_RETRIES = 3 in refunds/worker.py.
+        author: github:bobm
+        created_at: 2026-04-01T10:00:00Z
+        link: https://github.example/acme-pay/payments/pull/57
+      - external_id: review:5701
+        type: review
+        text: "approved: LGTM. Please keep 3 as a hard limit and don't make it configurable, a 4th attempt is exactly what got us frozen by Northwind."
+        author: github:alice-chen
+        created_at: 2026-04-01T15:40:00Z
+        parent_external_id: "#57"
+        link: https://github.example/acme-pay/payments/pull/57#pullrequestreview-5701
+      - external_id: comment:5702
+        type: comment
+        text: Does the cap also cover partial refunds? Those come from the merchant dashboard, not the API.
+        author: github:carol-ok
+        created_at: 2026-04-01T16:05:00Z
+        parent_external_id: "#57"
+        link: https://github.example/acme-pay/payments/pull/57#issuecomment-5702
+      - external_id: comment:5703
+        type: comment
+        text: Yes, partial refunds go through the same refund worker, so they are capped at 3 retries too.
+        author: github:bobm
+        created_at: 2026-04-01T16:30:00Z
+        parent_external_id: "#57"
+        link: https://github.example/acme-pay/payments/pull/57#issuecomment-5703
+      - external_id: "#63"
+        type: pr
+        title: Require idempotency keys on charge_card()
+        text: |
+          charge_card() now takes a required idempotency_key argument, a UUIDv4 that checkout generates once per order attempt.
+          The key is stored in charges.idempotency_key with a unique index, and a repeated call with the same key returns
+          the original charge instead of charging the card again. Keys are kept for 24 hours, which matches PayGate.
+          This fixes the double charges we saw when RabbitMQ redelivered messages after a worker restart (PAY-140).
+        author: github:carol-ok
+        created_at: 2026-04-27T09:15:00Z
+        link: https://github.example/acme-pay/payments/pull/63
+      - external_id: review:6301
+        type: review
+        text: "approved: LGTM. Unique index plus 24h retention is the right call."
+        author: github:alice-chen
+        created_at: 2026-04-27T14:00:00Z
+        parent_external_id: "#63"
+        link: https://github.example/acme-pay/payments/pull/63#pullrequestreview-6301
+      - external_id: review_comment:6302
+        type: comment
+        text: "payments/charges.py: if the same key comes back with a different amount or currency we should not return the old charge. Raise an error instead."
+        author: github:bobm
+        created_at: 2026-04-27T14:20:00Z
+        parent_external_id: "#63"
+        link: https://github.example/acme-pay/payments/pull/63#discussion_r6302
+      - external_id: comment:6303
+        type: comment
+        text: Done. Reusing an idempotency key with a different amount or currency now raises error E4012 (IdempotencyKeyMismatch) and nothing is charged.
+        author: github:carol-ok
+        created_at: 2026-04-28T09:00:00Z
+        parent_external_id: "#63"
+        link: https://github.example/acme-pay/payments/pull/63#issuecomment-6303
+      - external_id: "#71"
+        type: pr
+        title: Move billing calls from REST to gRPC
+        text: |
+          payments calls billing-service on every charge, and the REST/JSON calls had a p99 latency of 420ms.
+          A gRPC prototype measured 95ms p99 in staging. This PR adds the billing/v1/billing.proto client and switches
+          calls over behind the feature flag billing_grpc, starting at 10% of traffic. Alice and Frank chose gRPC over
+          tuning HTTP keep-alive because billing will also stream invoice events later (PAY-152).
+        author: github:bobm
+        created_at: 2026-06-10T11:00:00Z
+        link: https://github.example/acme-pay/payments/pull/71
+      - external_id: review:7101
+        type: review
+        text: "approved: LGTM. The proto in billing/v1/billing.proto looks clean."
+        author: github:carol-ok
+        created_at: 2026-06-10T15:30:00Z
+        parent_external_id: "#71"
+        link: https://github.example/acme-pay/payments/pull/71#pullrequestreview-7101
+      - external_id: review:7102
+        type: review
+        text: "approved: ship it behind billing_grpc at 10% first and watch the error rate."
+        author: github:alice-chen
+        created_at: 2026-06-11T09:00:00Z
+        parent_external_id: "#71"
+        link: https://github.example/acme-pay/payments/pull/71#pullrequestreview-7102
+      - external_id: "#78"
+        type: issue
+        title: "Flaky test: test_refund_worker_backoff"
+        text: |
+          test_refund_worker_backoff fails about 1 in 15 CI runs. It uses real time.sleep and asserts on wall-clock time,
+          so it breaks when the CI runner is slow. Suggest freezing time with freezegun instead.
+        author: github:carol-ok
+        created_at: 2026-07-02T08:40:00Z
+        link: https://github.example/acme-pay/payments/issues/78
+      - external_id: comment:7801
+        type: comment
+        text: Fixed by switching the test to freezegun. 200 CI reruns in a row were green, closing this.
+        author: github:bobm
+        created_at: 2026-07-03T16:00:00Z
+        parent_external_id: "#78"
+        link: https://github.example/acme-pay/payments/issues/78#issuecomment-7801
+      - external_id: "#84"
+        type: pr
+        title: Upgrade payments-db from Postgres 15 to 16
+        text: |
+          Upgrades payments-db from Postgres 15.6 to 16.4 with pg_upgrade --link. We need 16 so the analytics team can run
+          logical replication from the standby, and our cloud provider ends support for 15 in early 2027.
+          Tested on a staging snapshot: 11 minutes of downtime. Maintenance window is Saturday Aug 22, 02:00 to 03:00 UTC;
+          checkout keeps queueing orders in RabbitMQ during the window. Tracked in PAY-160.
+        author: github:alice-chen
+        created_at: 2026-08-18T10:00:00Z
+        link: https://github.example/acme-pay/payments/pull/84
+      - external_id: review:8401
+        type: review
+        text: "approved: runbook steps look good. I'll be second on call during the window."
+        author: github:bobm
+        created_at: 2026-08-18T13:00:00Z
+        parent_external_id: "#84"
+        link: https://github.example/acme-pay/payments/pull/84#pullrequestreview-8401
+      - external_id: comment:8402
+        type: comment
+        text: "build #1287 passed"
+        author: github:ci-bot
+        created_at: 2026-08-18T10:12:00Z
+        parent_external_id: "#84"
+        link: https://github.example/acme-pay/payments/pull/84#issuecomment-8402
+      - external_id: "#88"
+        type: pr
+        title: Retry policy for merchant webhooks
+        text: |
+          Merchant webhooks (payment.succeeded, refund.completed, ...) were sent once and dropped on failure.
+          New policy: a delivery counts as failed unless the merchant returns 2xx within 10 seconds, and we retry at
+          1 minute, 5 minutes, 30 minutes, 2 hours and 12 hours. After those 5 retries the event is marked failed and
+          shown in the merchant dashboard with a manual resend button. Implements PAY-171.
+        author: github:carol-ok
+        created_at: 2026-08-31T09:30:00Z
+        link: https://github.example/acme-pay/payments/pull/88
+      - external_id: review:8801
+        type: review
+        text: "approved: LGTM. The schedule matches what we promised merchants in PAY-171."
+        author: github:alice-chen
+        created_at: 2026-08-31T14:00:00Z
+        parent_external_id: "#88"
+        link: https://github.example/acme-pay/payments/pull/88#pullrequestreview-8801
+      - external_id: "#92"
+        type: pr
+        title: Rate limit the public API per API key
+        text: |
+          Adds a Redis token bucket in front of the public API: 100 requests per second per API key with bursts up to 200.
+          Over the limit the API returns 429 with a Retry-After header. Enterprise merchants can ask support for a higher limit.
+          Follows the Sept 3 incident where one merchant integration looped at about 9,000 req/s and degraded the API
+          for everyone (PAY-178).
+        author: github:bobm
+        created_at: 2026-09-08T10:00:00Z
+        link: https://github.example/acme-pay/payments/pull/92
+      - external_id: review:9201
+        type: review
+        text: "changes requested: the Redis bucket keys have no TTL, so keys for deleted API keys stay in Redis forever."
+        author: github:carol-ok
+        created_at: 2026-09-08T13:30:00Z
+        parent_external_id: "#92"
+        link: https://github.example/acme-pay/payments/pull/92#pullrequestreview-9201
+      - external_id: review:9202
+        type: review
+        text: "approved: TTL of 1 hour on bucket keys is fine. LGTM, ship it."
+        author: github:alice-chen
+        created_at: 2026-09-09T09:10:00Z
+        parent_external_id: "#92"
+        link: https://github.example/acme-pay/payments/pull/92#pullrequestreview-9202
+
+  # ---------------------------------------------------------------- GitHub: auth (private, auth team only)
+  - kind: github
+    external_id: acme-pay/auth
+    name: acme-pay/auth
+    public: false
+    members: [github:dave-kim, github:erin-w, github:frank-pm]
+    items:
+      - external_id: "#17"
+        type: pr
+        title: Use Keycloak instead of Auth0 for customer SSO
+        text: |
+          We compared Auth0 and self-hosted Keycloak for merchant SSO (SAML and OIDC). Auth0 quoted about $38k per year
+          at our projected MAU, and EU data residency would need their enterprise plan. Keycloak 25 on our own cluster
+          costs roughly $6k per year in infrastructure and its SAML brokering worked for all 4 pilot merchants.
+          Decision by Dave and Erin, signed off by Frank: Keycloak (AUTH-21). This PR adds the realm config in
+          deploy/keycloak/realm.json and the OIDC client for the merchant dashboard.
+        author: github:dave-kim
+        created_at: 2026-05-20T10:00:00Z
+        link: https://github.example/acme-pay/auth/pull/17
+      - external_id: review:1701
+        type: review
+        text: "approved: LGTM. Reviewed the realm export in deploy/keycloak/realm.json."
+        author: github:erin-w
+        created_at: 2026-05-20T15:00:00Z
+        parent_external_id: "#17"
+        link: https://github.example/acme-pay/auth/pull/17#pullrequestreview-1701
+      - external_id: review_comment:1702
+        type: comment
+        text: "deploy/keycloak/realm.json: set accessTokenLifespan to 5 minutes instead of 30, the dashboard refreshes tokens anyway."
+        author: github:erin-w
+        created_at: 2026-05-20T15:02:00Z
+        parent_external_id: "#17"
+        link: https://github.example/acme-pay/auth/pull/17#discussion_r1702
+      - external_id: "#23"
+        type: pr
+        title: Rotate JWT signing keys every 90 days
+        text: |
+          RS256 signing keys now rotate automatically every 90 days via the rotate-signing-keys cron job.
+          The new key is published in the JWKS 7 days before it becomes active, and the old key stays in the JWKS for
+          24 hours after it is retired so tokens in flight still validate. Comes from the June security audit,
+          which found our signing key had not been rotated since 2024 (AUTH-34).
+        author: github:erin-w
+        created_at: 2026-07-08T09:00:00Z
+        link: https://github.example/acme-pay/auth/pull/23
+      - external_id: review:2301
+        type: review
+        text: "approved: LGTM. A 7-day overlap is enough for the mobile apps that cache the JWKS."
+        author: github:dave-kim
+        created_at: 2026-07-08T14:00:00Z
+        parent_external_id: "#23"
+        link: https://github.example/acme-pay/auth/pull/23#pullrequestreview-2301
+      - external_id: comment:2302
+        type: comment
+        text: Is there a way to rotate the signing key by hand in an emergency, for example if a key leaks?
+        author: github:frank-pm
+        created_at: 2026-07-08T15:00:00Z
+        parent_external_id: "#23"
+        link: https://github.example/acme-pay/auth/pull/23#issuecomment-2302
+      - external_id: comment:2303
+        type: comment
+        text: Yes, `make rotate-now` runs the same job immediately and skips the 7-day pre-publish. It is documented in the auth runbook.
+        author: github:erin-w
+        created_at: 2026-07-08T15:20:00Z
+        parent_external_id: "#23"
+        link: https://github.example/acme-pay/auth/pull/23#issuecomment-2303
+
+  # ---------------------------------------------------------------- GitHub: docs (public)
+  - kind: github
+    external_id: acme-pay/docs
+    name: acme-pay/docs
+    public: true
+    members: [github:alice-chen, github:bobm, github:carol-ok, github:dave-kim, github:erin-w, github:frank-pm]
+    items:
+      - external_id: "#12"
+        type: pr
+        title: Move the docs site from Jekyll to MkDocs
+        text: |
+          The Jekyll build took about 6 minutes and needed a Ruby toolchain nobody on the team maintains.
+          MkDocs Material builds the same site in 40 seconds, needs only Python, and has search built in.
+          Frank approved the switch at the January all-hands. Old Jekyll URLs redirect until March 31.
+        author: github:carol-ok
+        created_at: 2026-02-05T10:00:00Z
+        link: https://github.example/acme-pay/docs/pull/12
+      - external_id: review:1201
+        type: review
+        text: "approved: LGTM, the build is so much faster."
+        author: github:dave-kim
+        created_at: 2026-02-05T16:00:00Z
+        parent_external_id: "#12"
+        link: https://github.example/acme-pay/docs/pull/12#pullrequestreview-1201
+      - external_id: comment:1202
+        type: comment
+        text: "build #212 passed"
+        author: github:ci-bot
+        created_at: 2026-02-05T10:08:00Z
+        parent_external_id: "#12"
+        link: https://github.example/acme-pay/docs/pull/12#issuecomment-1202
+      - external_id: "#15"
+        type: pr
+        title: Add the payments on-call runbook
+        text: |
+          Payments on-call rotates weekly, with the handover on Mondays at 10:00 UTC; the pager service is payments-prod.
+          If the payments.charge queue in RabbitMQ is deeper than 5,000 messages, scale payments-worker to 12 replicas.
+          Failed messages land in payments.charge.dlq and can be replayed with `make replay-dlq`.
+          Escalate to Alice Chen first, then Frank Rossi.
+        author: github:alice-chen
+        created_at: 2026-03-20T09:00:00Z
+        link: https://github.example/acme-pay/docs/pull/15
+      - external_id: "#19"
+        type: pr
+        title: Document service owners
+        text: |
+          Adds owners.md. payments-worker: Alice Chen. billing-service: Bob Martinez. notification-service: Carol Okafor,
+          who took it over on April 1, 2026 when it moved to the payments team. auth-service and Keycloak: Dave Kim.
+        author: github:frank-pm
+        created_at: 2026-04-02T11:00:00Z
+        link: https://github.example/acme-pay/docs/pull/19
+
+  # ---------------------------------------------------------------- Jira: PAY (payments team)
+  - kind: jira
+    external_id: PAY
+    name: Payments
+    members: [jira:acc-alice, jira:acc-bob, jira:acc-carol, jira:acc-frank]
+    items:
+      - external_id: PAY-118
+        type: issue
+        title: Payment provider timeouts take down checkout under load
+        text: |
+          Type: Bug · Status: Done · Assignee: Alice Chen
+
+          In the Feb 26 load test, 8% of charge calls to PayGate timed out after 30 seconds at 400 rps, and because
+          checkout calls payments synchronously those checkout requests failed too. Proposal: decouple checkout from
+          payments with a queue so a slow provider does not block checkout.
+        author: jira:acc-alice
+        created_at: 2026-02-27T14:00:00Z
+        link: https://acme-pay.atlassian.example/browse/PAY-118
+      - external_id: comment:1181
+        type: comment
+        text: Agreed with Alice, let's use RabbitMQ since platform already runs it. Kafka is overkill at our volume of about 50 charges/s at peak.
+        author: jira:acc-frank
+        created_at: 2026-03-02T12:00:00Z
+        parent_external_id: PAY-118
+        link: https://acme-pay.atlassian.example/browse/PAY-118?focusedCommentId=1181
+      - external_id: PAY-131
+        type: issue
+        title: Cap refund retries at 3 to avoid bank fraud flags
+        text: |
+          Type: Task · Status: Done · Assignee: Bob Martinez
+
+          On March 28 Northwind Bank froze our merchant account for 6 hours after the refund worker retried one refund
+          a 4th time. The bank's rule: more than 3 refund attempts on the same transaction within 24 hours is flagged as fraud.
+        author: jira:acc-bob
+        created_at: 2026-03-30T09:30:00Z
+        link: https://acme-pay.atlassian.example/browse/PAY-131
+      - external_id: comment:1311
+        type: comment
+        text: "Decision: hard cap of 3 retries, then the refund goes to the manual review queue and on-call is paged. Bob implements it in PR #57."
+        author: jira:acc-alice
+        created_at: 2026-03-30T10:00:00Z
+        parent_external_id: PAY-131
+        link: https://acme-pay.atlassian.example/browse/PAY-131?focusedCommentId=1311
+      - external_id: PAY-140
+        type: issue
+        title: Customers double-charged when RabbitMQ redelivers messages
+        text: |
+          Type: Bug · Status: Done · Assignee: Carol Okafor
+
+          On April 22, 14 customers were charged twice when payments-worker restarted mid-batch and RabbitMQ redelivered
+          the unacked messages. All 14 were refunded the same day. Fix: idempotency keys on charge_card() (PR #63).
+        author: jira:acc-carol
+        created_at: 2026-04-22T17:00:00Z
+        link: https://acme-pay.atlassian.example/browse/PAY-140
+      - external_id: PAY-152
+        type: issue
+        title: Billing calls are too slow (p99 420ms)
+        text: |
+          Type: Task · Status: Done · Assignee: Bob Martinez
+
+          Every charge calls billing-service over REST/JSON and the p99 latency is 420ms, a third of our checkout budget.
+          Options: tune HTTP keep-alive and connection pooling, or move the calls to gRPC.
+        author: jira:acc-bob
+        created_at: 2026-06-01T10:00:00Z
+        link: https://acme-pay.atlassian.example/browse/PAY-152
+      - external_id: comment:1521
+        type: comment
+        text: Approved for this sprint. Alice and I chose gRPC over tuning keep-alive, since billing will also stream invoice events to us later. Roll it out behind a feature flag.
+        author: jira:acc-frank
+        created_at: 2026-06-02T09:00:00Z
+        parent_external_id: PAY-152
+        link: https://acme-pay.atlassian.example/browse/PAY-152?focusedCommentId=1521
+      - external_id: PAY-160
+        type: issue
+        title: Upgrade payments-db to Postgres 16
+        text: |
+          Type: Task · Status: Done · Assignee: Alice Chen
+
+          Move payments-db from Postgres 15 to 16 before the cloud provider drops support for 15. The analytics team
+          also needs logical replication from the standby, which needs 16. Plan: pg_upgrade --link in a one-hour window.
+        author: jira:acc-alice
+        created_at: 2026-08-10T10:00:00Z
+        link: https://acme-pay.atlassian.example/browse/PAY-160
+      - external_id: PAY-171
+        type: issue
+        title: Retry failed merchant webhooks
+        text: |
+          Type: Story · Status: Done · Assignee: Carol Okafor
+
+          Merchants miss payment events when their endpoint is briefly down, because we send each webhook only once.
+          Agreed policy: 5 retries at 1m, 5m, 30m, 2h and 12h, then mark the event failed and allow a manual resend.
+        author: jira:acc-carol
+        created_at: 2026-08-25T10:00:00Z
+        link: https://acme-pay.atlassian.example/browse/PAY-171
+      - external_id: PAY-178
+        type: issue
+        title: Rate limit the public API
+        text: |
+          Type: Task · Status: Done · Assignee: Bob Martinez
+
+          On Sept 3 one merchant integration got stuck in a loop and sent about 9,000 requests per second, which degraded
+          the public API for every merchant. We need per-API-key rate limits.
+        author: jira:acc-alice
+        created_at: 2026-09-03T15:00:00Z
+        link: https://acme-pay.atlassian.example/browse/PAY-178
+      - external_id: comment:1781
+        type: comment
+        text: Let's do 100 req/s per API key with bursts up to 200. Enterprise keys can get a higher limit through support.
+        author: jira:acc-alice
+        created_at: 2026-09-03T15:30:00Z
+        parent_external_id: PAY-178
+        link: https://acme-pay.atlassian.example/browse/PAY-178?focusedCommentId=1781
+      - external_id: PAY-185
+        type: issue
+        title: Explain error E4012 in the merchant dashboard
+        text: |
+          Type: Task · Status: In Progress · Assignee: Carol Okafor
+
+          Merchants see the raw code E4012 with no explanation. E4012 means an idempotency key was reused with a
+          different amount or currency (IdempotencyKeyMismatch), so the charge was refused. Show a readable message
+          that tells the merchant to generate a new idempotency key for the new amount.
+        author: jira:acc-carol
+        created_at: 2026-06-18T11:00:00Z
+        link: https://acme-pay.atlassian.example/browse/PAY-185
+      - external_id: comment:1851
+        type: comment
+        text: "+1"
+        author: jira:acc-bob
+        created_at: 2026-06-18T11:20:00Z
+        parent_external_id: PAY-185
+        link: https://acme-pay.atlassian.example/browse/PAY-185?focusedCommentId=1851
+
+  # ---------------------------------------------------------------- Jira: AUTH (auth team)
+  - kind: jira
+    external_id: AUTH
+    name: Auth
+    members: [jira:acc-dave, jira:acc-frank]
+    items:
+      - external_id: AUTH-21
+        type: issue
+        title: "Customer SSO provider: Keycloak or Auth0"
+        text: |
+          Type: Spike · Status: Done · Assignee: Dave Kim
+
+          Merchants want SSO (SAML and OIDC) into the dashboard. Compare Auth0 (hosted) with self-hosted Keycloak
+          on cost, EU data residency and SAML support, and test both with the 4 pilot merchants.
+        author: jira:acc-dave
+        created_at: 2026-05-04T09:00:00Z
+        link: https://acme-pay.atlassian.example/browse/AUTH-21
+      - external_id: comment:211
+        type: comment
+        text: Signed off on Keycloak. Cost decided it, about $38k per year for Auth0 enterprise versus roughly $6k per year of infrastructure for Keycloak, and Keycloak keeps EU merchant data in our own region.
+        author: jira:acc-frank
+        created_at: 2026-05-15T10:00:00Z
+        parent_external_id: AUTH-21
+        link: https://acme-pay.atlassian.example/browse/AUTH-21?focusedCommentId=211
+      - external_id: AUTH-34
+        type: issue
+        title: Rotate JWT signing keys every 90 days
+        text: |
+          Type: Task · Status: Done · Assignee: Erin Walsh
+
+          The June security audit found our JWT signing key had not been rotated since 2024. Rotate automatically every
+          90 days, pre-publish the next key in the JWKS, and keep a manual emergency rotation.
+        author: jira:acc-dave
+        created_at: 2026-06-25T10:00:00Z
+        link: https://acme-pay.atlassian.example/browse/AUTH-34
+      - external_id: AUTH-40
+        type: issue
+        title: Require MFA for admin dashboard users
+        text: |
+          Type: Task · Status: To Do · Assignee: Dave Kim
+
+          All admin dashboard users must use TOTP-based MFA by November 1. Enforce it with a Keycloak required action
+          on the admin realm.
+        author: jira:acc-dave
+        created_at: 2026-10-05T10:00:00Z
+        link: https://acme-pay.atlassian.example/browse/AUTH-40
+
+  # ---------------------------------------------------------------- Slack: #eng-payments (payments team)
+  - kind: slack
+    external_id: C0ENGPAY
+    name: "#eng-payments"
+    members: [slack:U01ALICE, slack:U02BOB, slack:U03CAROL, slack:U06FRANK]
+    items:
+      - external_id: "1772450000.000100"
+        type: thread
+        title: "Load test results: PayGate timed out on 8% of charges at 400 rps and took checkout down with it."
+        text: |
+          slack:U01ALICE: Load test results: PayGate timed out on 8% of charges at 400 rps and took checkout down with it. I want a queue between checkout and payments.
+          slack:U02BOB: RabbitMQ or Kafka?
+          slack:U01ALICE: RabbitMQ. Platform already runs it and we peak at about 50 charges/s, Kafka is overkill for that.
+          slack:U06FRANK: Agreed, go with RabbitMQ. Let's track it in PAY-118.
+          slack:U01ALICE: PR is up: #42. Bob and Carol, can you review?
+        author: slack:U01ALICE
+        created_at: 2026-03-02T11:13:20Z
+        link: https://acme-pay.slack.example/archives/C0ENGPAY/p1772450000000100
+      - external_id: "1774861500.000200"
+        type: thread
+        title: Northwind froze the merchant account again this morning, the refund worker hit a 4th retry on one transaction.
+        text: |
+          slack:U02BOB: Northwind froze the merchant account again this morning, the refund worker hit a 4th retry on one transaction.
+          slack:U01ALICE: That's the bank's rule: more than 3 refund attempts within 24h gets flagged as fraud. We cap retries at 3, no exceptions.
+          slack:U03CAROL: What happens to the refund after the 3rd failure?
+          slack:U01ALICE: It goes to the manual review queue and pages on-call. Bob, can you take PAY-131?
+          slack:U02BOB: On it, PR by tomorrow.
+        author: slack:U02BOB
+        created_at: 2026-03-30T09:05:00Z
+        link: https://acme-pay.slack.example/archives/C0ENGPAY/p1774861500000200
+      - external_id: "1774958520.000300"
+        type: message
+        text: lunch?
+        author: slack:U03CAROL
+        created_at: 2026-03-31T12:02:00Z
+        link: https://acme-pay.slack.example/archives/C0ENGPAY/p1774958520000300
+      - external_id: "1775056800.000400"
+        type: thread
+        title: Who owns notification-service now that Priya moved to the data team?
+        text: |
+          slack:U06FRANK: Who owns notification-service now that Priya moved to the data team?
+          slack:U03CAROL: I do, as of today. It moves to the payments team since most notifications are payment receipts.
+          slack:U06FRANK: Great, I'll put it in the owners page in the docs repo.
+        author: slack:U06FRANK
+        created_at: 2026-04-01T15:20:00Z
+        link: https://acme-pay.slack.example/archives/C0ENGPAY/p1775056800000400
+      - external_id: "1781777400.000500"
+        type: thread
+        title: Merchant support is asking what E4012 means in the dashboard.
+        text: |
+          slack:U03CAROL: Merchant support is asking what E4012 means in the dashboard.
+          slack:U02BOB: It's IdempotencyKeyMismatch: the same idempotency key was sent again with a different amount or currency, so we refuse the charge. Added in #63.
+          slack:U03CAROL: Thanks, I'll add a readable message for it in PAY-185.
+        author: slack:U03CAROL
+        created_at: 2026-06-18T10:10:00Z
+        link: https://acme-pay.slack.example/archives/C0ENGPAY/p1781777400000500
+      - external_id: "1782307800.000600"
+        type: thread
+        title: "billing_grpc flag is at 10%: p99 for that slice dropped from 420ms to 98ms."
+        text: |
+          slack:U02BOB: billing_grpc flag is at 10%: p99 for that slice dropped from 420ms to 98ms.
+          slack:U01ALICE: Nice. Go to 100% on Monday if the error rate stays under 0.1%.
+          slack:U02BOB: Will do. Once it has been at 100% for two weeks I'll delete the old REST client.
+        author: slack:U02BOB
+        created_at: 2026-06-24T13:30:00Z
+        link: https://acme-pay.slack.example/archives/C0ENGPAY/p1782307800000600
+      - external_id: "1782752700.000700"
+        type: message
+        text: thanks!
+        author: slack:U02BOB
+        created_at: 2026-06-29T17:05:00Z
+        link: https://acme-pay.slack.example/archives/C0ENGPAY/p1782752700000700
+      - external_id: "1787215500.000800"
+        type: thread
+        title: "Postgres 16 upgrade for payments-db is this Saturday, Aug 22, 02:00 to 03:00 UTC."
+        text: |
+          slack:U01ALICE: Postgres 16 upgrade for payments-db is this Saturday, Aug 22, 02:00 to 03:00 UTC. Expect about 11 minutes of downtime; checkout orders will wait in RabbitMQ meanwhile.
+          slack:U02BOB: I'm second on call for it.
+          slack:U01ALICE: Done: payments-db is on 16.4, actual downtime was 9 minutes and the queue drained in 2 minutes.
+        author: slack:U01ALICE
+        created_at: 2026-08-20T08:45:00Z
+        link: https://acme-pay.slack.example/archives/C0ENGPAY/p1787215500000800
+      - external_id: "1787368800.000900"
+        type: message
+        text: ":tada: :tada:"
+        author: slack:U06FRANK
+        created_at: 2026-08-22T03:20:00Z
+        link: https://acme-pay.slack.example/archives/C0ENGPAY/p1787368800000900
+      - external_id: "1788444900.001000"
+        type: thread
+        title: "Public API is degraded: one merchant integration is looping at about 9,000 req/s."
+        text: |
+          slack:U02BOB: Public API is degraded: one merchant integration is looping at about 9,000 req/s.
+          slack:U01ALICE: Block that API key for now. We need per-key rate limits, I'm opening PAY-178.
+          slack:U02BOB: I'll do a Redis token bucket, 100 req/s per key.
+        author: slack:U02BOB
+        created_at: 2026-09-03T14:15:00Z
+        link: https://acme-pay.slack.example/archives/C0ENGPAY/p1788444900001000
+
+  # ---------------------------------------------------------------- Slack: #eng-auth (auth team)
+  - kind: slack
+    external_id: C0ENGAUTH
+    name: "#eng-auth"
+    members: [slack:U04DAVE, slack:U05ERIN, slack:U06FRANK]
+    items:
+      - external_id: "1778776800.000100"
+        type: thread
+        title: "SSO decision time: Auth0 quoted $38k/year for our MAU, and EU data residency needs their enterprise plan."
+        text: |
+          slack:U04DAVE: SSO decision time: Auth0 quoted $38k/year for our MAU, and EU data residency needs their enterprise plan. Self-hosted Keycloak is about $6k/year of infra.
+          slack:U05ERIN: With Keycloak we own the upgrades and the SAML edge cases.
+          slack:U04DAVE: True, but Keycloak 25 SAML brokering worked for all 4 pilot merchants.
+          slack:U06FRANK: Go with Keycloak. Erin, can you own the upgrades? Writing it up in AUTH-21.
+          slack:U05ERIN: Yes, I'll upgrade it every quarter.
+        author: slack:U04DAVE
+        created_at: 2026-05-14T16:40:00Z
+        link: https://acme-pay.slack.example/archives/C0ENGAUTH/p1778776800000100
+      - external_id: "1783681200.000200"
+        type: thread
+        title: "Signing key rotation is live: every 90 days, next key in the JWKS 7 days early, old key kept for 24h."
+        text: |
+          slack:U05ERIN: Signing key rotation is live: every 90 days, next key in the JWKS 7 days early, old key kept for 24h. PR #23.
+          slack:U04DAVE: Nice. First automatic rotation is on Oct 6, I'll watch the login error rate that day.
+        author: slack:U05ERIN
+        created_at: 2026-07-10T11:00:00Z
+        link: https://acme-pay.slack.example/archives/C0ENGAUTH/p1783681200000200
+      - external_id: "1789984800.000300"
+        type: message
+        text: Keycloak is upgraded to 25.0.6 in prod, no login errors so far. Next quarterly upgrade is planned for December.
+        author: slack:U05ERIN
+        created_at: 2026-09-21T10:00:00Z
+        link: https://acme-pay.slack.example/archives/C0ENGAUTH/p1789984800000300
+
+  # ---------------------------------------------------------------- Slack: #general (everyone)
+  - kind: slack
+    external_id: C0GENERAL
+    name: "#general"
+    members: [slack:U01ALICE, slack:U02BOB, slack:U03CAROL, slack:U04DAVE, slack:U05ERIN, slack:U06FRANK]
+    items:
+      - external_id: "1770886800.000100"
+        type: message
+        text: The docs site now builds from the acme-pay/docs repo with MkDocs Material instead of Jekyll, thanks to Carol. Builds take 40 seconds now, and old Jekyll links redirect until March 31.
+        author: slack:U06FRANK
+        created_at: 2026-02-12T09:00:00Z
+        link: https://acme-pay.slack.example/archives/C0GENERAL/p1770886800000100
+      - external_id: "1774252800.000200"
+        type: message
+        text: "Reminder: payments on-call hands over every Monday at 10:00 UTC. The payments runbook is in the docs repo under runbooks/payments."
+        author: slack:U06FRANK
+        created_at: 2026-03-23T08:00:00Z
+        link: https://acme-pay.slack.example/archives/C0GENERAL/p1774252800000200
+      - external_id: "1775133000.000300"
+        type: message
+        text: Deploy payments-worker v2.14.0 to prod succeeded
+        author: slack:B0CIBOT
+        created_at: 2026-04-02T12:30:00Z
+        link: https://acme-pay.slack.example/archives/C0GENERAL/p1775133000000300

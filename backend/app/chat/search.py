@@ -8,7 +8,8 @@ its SQL query (`permissions.visible`), so hidden items are never fetched, ranked
   (`PAY-1234`), function names (`charge_card`) and error codes (`E4012`) must all match.
 - `graph_search` (6.4): entities named in the question, then the knowledge graph 1–2 links out.
 - `find_evidence` (6.5): the three in parallel, merged, de-duplicated and reranked by a
-  cross-encoder; the best TOP_K_EVIDENCE are labelled E1…E8.
+  cross-encoder; the best TOP_K_EVIDENCE are labelled E1…E8. Accounts in the evidence get the
+  names admins linked them under: `Carol Okafor (github:carol-ok)`.
 """
 
 from __future__ import annotations
@@ -28,13 +29,14 @@ from sqlalchemy.orm import Session, aliased
 from app.chat.permissions import visible
 from app.config.settings import get_models_config, get_settings
 from app.db.engine import new_session
-from app.db.schema import Chunk, Decision, Edge, EntityAlias, Item
+from app.db.schema import Chunk, Decision, Edge, EntityAlias, Item, UserSourceIdentity
 from app.learning.link import key, keys_in
 from app.models import gateway
 
 # ids, function names, error codes: a word with a digit, an underscore or an inner capital
 log = logging.getLogger("syncra.chat")
 
+ACCOUNT = re.compile(r"\b(?:github|jira|slack):[A-Za-z0-9](?:[A-Za-z0-9:._-]*[A-Za-z0-9])?")
 IDENTIFIER = re.compile(r"\b\w[\w-]*?(?:\d|_|[a-z][A-Z])[\w-]*")
 
 
@@ -64,6 +66,14 @@ class Evidence:
         and the answer writer (a bare "LGTM" says nothing about which PR it approves)."""
         by = f" by {self.author}" if self.author else ""
         return f"{self.title or 'untitled'} ({self.type}{by})"
+
+    @property
+    def premise(self) -> str:
+        """The evidence as the claim checker reads it: the header as a sentence (the NLI model
+        reads `A review by github:bob of "Add the queue".` far better than a label in brackets)."""
+        by = f" by {self.author}" if self.author else ""
+        about = f' of "{self.title}"' if self.title else ""
+        return f"A {self.type}{by}{about}.\n{self.text}"
 
 
 # A reply's or review's parent item, for its title
@@ -268,8 +278,31 @@ def find_evidence(
             candidates.append(evidence)
     if not candidates:
         return []
+    with session_factory() as session:
+        candidates = with_names(session, candidates)
     scores = gateway.rerank("reranker", question, [f"{e.header}\n{e.text}" for e in candidates])
     threshold = get_models_config()["reranker"].threshold
     ranked = sorted(zip(scores, candidates, strict=True), key=lambda pair: -pair[0])
     best = [(s, e) for s, e in ranked if s >= threshold][: get_settings().top_k_evidence]
     return [replace(e, score=s, label=f"E{n}") for n, (s, e) in enumerate(best, 1)]
+
+
+def with_names(session: Session, evidence: list[Evidence]) -> list[Evidence]:
+    """Accounts in each piece's author and text followed by the person's name, where an admin
+    linked that account (`Carol Okafor (github:carol-ok)`): answers then name people, and the
+    claim checker can match "Carol" in an answer to the review she wrote."""
+    accounts = {a for e in evidence for a in ACCOUNT.findall(f"{e.author or ''} {e.text}")}
+    rows = session.execute(
+        select(UserSourceIdentity.source_kind, UserSourceIdentity.external_id,
+               UserSourceIdentity.display_name)
+        .where(func.concat(UserSourceIdentity.source_kind, ":", UserSourceIdentity.external_id)
+               .in_(accounts), UserSourceIdentity.display_name.is_not(None))
+    ).all()  # fmt: skip
+    names = {f"{kind}:{account}": name for kind, account, name in rows}
+    if not names:
+        return evidence
+
+    def named(text: str) -> str:
+        return ACCOUNT.sub(lambda m: f"{names[m[0]]} ({m[0]})" if m[0] in names else m[0], text)
+
+    return [replace(e, author=e.author and named(e.author), text=named(e.text)) for e in evidence]

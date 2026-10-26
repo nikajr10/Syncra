@@ -4,6 +4,7 @@ from functools import cache
 
 from sqlalchemy.orm import Session
 
+from app.api.auth import add_user, link_account
 from app.chat import search
 from app.db.schema import Chunk, Item, Source
 from app.learning.decisions import FoundDecision
@@ -151,3 +152,13 @@ def test_a_failing_search_is_skipped(db_session: Session) -> None:
 
     found = search.find_evidence("PAY-1234", PUBLIC, (broken, search.keyword_search))
     assert [e.title for e in found] == ["PAY-1234"]
+
+
+def test_linked_accounts_get_their_names(db_session: Session) -> None:
+    add_user(db_session, "carol", "correct horse")
+    link_account(db_session, "carol", "github", "carol-ok", "Carol Okafor")
+    piece = search.Evidence("chunk", 1, "github:carol-ok: LGTM, cc github:nobody", 1, "review",
+                            "x", None, "github:carol-ok", None, 0.0)  # fmt: skip
+    [named] = search.with_names(db_session, [piece])
+    assert named.author == "Carol Okafor (github:carol-ok)"
+    assert named.text == "Carol Okafor (github:carol-ok): LGTM, cc github:nobody"

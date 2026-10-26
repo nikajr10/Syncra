@@ -67,7 +67,7 @@ def write(
         history=render_history(history),
         question=TAG.sub("", question),
     )
-    yield from (client or gateway.ollama()).stream("answer_writer", user, system=prompt.system)
+    yield from (client or gateway.chat_ollama()).stream("answer_writer", user, system=prompt.system)
 
 
 def split(text: str) -> tuple[str, list[str]]:

@@ -503,8 +503,8 @@ flowchart LR
 - [ ] 9.4 Sources and settings screens
 
 **Phase 10 — Quality and launch**
-- [ ] 10.1 Demo data
-- [ ] 10.2 Evaluation set and runner
+- [x] 10.1 Demo data
+- [x] 10.2 Evaluation set and runner
 - [x] 10.3 Permission and safety tests
 - [ ] 10.4 Speed tuning
 - [x] 10.5 Monitoring and logs

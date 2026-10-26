@@ -1,0 +1,398 @@
+# Evaluation set for `make eval` (Task 10.2), on the demo company in company.yaml.
+# sources: "<source external_id>|<item external_id>" of the items that hold the answer; any one counts.
+# Only items the asking user may see are listed. hidden: items that must never show up for that user.
+
+# ---------------------------------------------------------------- answerable: why / meaning
+- question: Why do orders go through a queue before payments?
+  user: alice
+  answerable: true
+  sources: ["acme-pay/payments|#42", "C0ENGPAY|1772450000.000100", "PAY|PAY-118"]
+  answer: Because the payment provider PayGate timed out under load (8% of charges at 400 rps) and took checkout down, so checkout now hands orders to a RabbitMQ queue.
+
+- question: Why did we pick RabbitMQ instead of Kafka?
+  user: bob
+  answerable: true
+  sources: ["acme-pay/payments|#42", "C0ENGPAY|1772450000.000100", "PAY|comment:1181"]
+  answer: Platform already runs RabbitMQ and peak volume is only about 50 charges per second, so Kafka would be overkill.
+
+- question: Why are refund retries capped at 3?
+  user: carol
+  answerable: true
+  sources: ["acme-pay/payments|#57", "acme-pay/payments|review:5701", "PAY|PAY-131", "C0ENGPAY|1774861500.000200"]
+  answer: Northwind Bank flags more than 3 refund attempts on the same transaction within 24 hours as fraud and freezes the merchant account.
+
+- question: Why did we add idempotency keys to card charges?
+  user: alice
+  answerable: true
+  sources: ["acme-pay/payments|#63", "PAY|PAY-140"]
+  answer: Customers were double-charged when RabbitMQ redelivered messages after a payments-worker restart; idempotency keys stop a repeated charge.
+
+- question: Why did we move billing calls from REST to gRPC?
+  user: bob
+  answerable: true
+  sources: ["acme-pay/payments|#71", "PAY|PAY-152", "PAY|comment:1521"]
+  answer: REST calls to billing-service had a p99 of 420ms while gRPC measured about 95ms, and billing will later stream invoice events.
+
+- question: Why is the refund worker backoff test flaky?
+  user: carol
+  answerable: true
+  sources: ["acme-pay/payments|#78"]
+  answer: It uses real time.sleep and asserts on wall-clock time, so it fails about 1 in 15 runs on slow CI runners.
+
+- question: Why are we upgrading the payments database to Postgres 16?
+  user: bob
+  answerable: true
+  sources: ["acme-pay/payments|#84", "PAY|PAY-160"]
+  answer: The analytics team needs logical replication from the standby, and the cloud provider is ending support for Postgres 15.
+
+- question: Why did we add rate limiting to the public API?
+  user: bob
+  answerable: true
+  sources: ["acme-pay/payments|#92", "PAY|PAY-178", "C0ENGPAY|1788444900.001000"]
+  answer: On Sept 3 a merchant integration looped at about 9,000 requests per second and degraded the API for every merchant.
+
+- question: Why did we move the docs site from Jekyll to MkDocs?
+  user: dave
+  answerable: true
+  sources: ["acme-pay/docs|#12", "C0GENERAL|1770886800.000100"]
+  answer: Jekyll builds took about 6 minutes and needed an unmaintained Ruby toolchain; MkDocs Material builds in 40 seconds with only Python and has search built in.
+
+- question: Why did we choose Keycloak over Auth0 for customer SSO?
+  user: dave
+  answerable: true
+  sources: ["acme-pay/auth|#17", "AUTH|AUTH-21", "AUTH|comment:211", "C0ENGAUTH|1778776800.000100"]
+  answer: Cost (Auth0 quoted about $38k per year versus about $6k of infrastructure for Keycloak), EU data residency, and Keycloak's SAML brokering worked for all 4 pilot merchants.
+
+# ---------------------------------------------------------------- answerable: exact ids / keywords
+- question: What does PAY-131 say?
+  user: alice
+  answerable: true
+  sources: ["PAY|PAY-131"]
+  answer: Northwind Bank froze the merchant account for 6 hours after a 4th refund retry; the bank flags more than 3 refund attempts in 24 hours as fraud, so retries are capped at 3.
+
+- question: What does charge_card() do with idempotency keys?
+  user: bob
+  answerable: true
+  sources: ["acme-pay/payments|#63"]
+  answer: It requires an idempotency_key (a UUIDv4 per order attempt), stores it with a unique index, and returns the original charge on a repeated call instead of charging again.
+
+- question: What is error E4012?
+  user: carol
+  answerable: true
+  sources: ["acme-pay/payments|comment:6303", "PAY|PAY-185", "C0ENGPAY|1781777400.000500"]
+  answer: E4012 is IdempotencyKeyMismatch, an idempotency key reused with a different amount or currency, so the charge is refused.
+
+- question: What is the billing_grpc feature flag for?
+  user: alice
+  answerable: true
+  sources: ["acme-pay/payments|#71", "C0ENGPAY|1782307800.000600"]
+  answer: It gates the switch of billing calls from REST to gRPC, starting at 10% of traffic.
+
+- question: What is the name of the dead-letter queue for charges?
+  user: frank
+  answerable: true
+  sources: ["acme-pay/payments|review:4204", "acme-pay/payments|7c3e9a1f5b2d48e6a0c4f8b19d2e7a3c5f1b6d90", "acme-pay/docs|#15"]
+  answer: payments.charge.dlq.
+
+- question: What does AUTH-40 say?
+  user: dave
+  answerable: true
+  sources: ["AUTH|AUTH-40"]
+  answer: All admin dashboard users must use TOTP-based MFA by November 1, enforced with a Keycloak required action.
+
+- question: What does make replay-dlq do?
+  user: dave
+  answerable: true
+  sources: ["acme-pay/docs|#15"]
+  answer: It replays failed charge messages from the payments.charge.dlq dead-letter queue.
+
+- question: Which Keycloak version is running in production?
+  user: dave
+  answerable: true
+  sources: ["C0ENGAUTH|1789984800.000300"]
+  answer: Keycloak 25.0.6.
+
+# ---------------------------------------------------------------- answerable: people / relations
+- question: Who reviewed the RabbitMQ queue PR?
+  user: carol
+  answerable: true
+  sources: ["acme-pay/payments|review:4201", "acme-pay/payments|review:4202", "acme-pay/payments|review:4204"]
+  answer: Bob Martinez and Carol Okafor.
+
+- question: Who decided to cap refund retries at 3?
+  user: bob
+  answerable: true
+  sources: ["acme-pay/payments|#57", "PAY|comment:1311", "C0ENGPAY|1774861500.000200"]
+  answer: Alice Chen.
+
+- question: Who wrote the idempotency key change for charges?
+  user: alice
+  answerable: true
+  sources: ["acme-pay/payments|#63"]
+  answer: Carol Okafor.
+
+- question: Who decided to use gRPC for billing instead of tuning keep-alive?
+  user: carol
+  answerable: true
+  sources: ["acme-pay/payments|#71", "PAY|comment:1521"]
+  answer: Alice Chen and Frank Rossi.
+
+- question: Who was second on call for the Postgres upgrade?
+  user: carol
+  answerable: true
+  sources: ["acme-pay/payments|review:8401", "C0ENGPAY|1787215500.000800"]
+  answer: Bob Martinez.
+
+- question: Who owns notification-service?
+  user: dave
+  answerable: true
+  sources: ["acme-pay/docs|#19"]
+  answer: Carol Okafor, since April 1, 2026.
+
+- question: Who owns billing-service?
+  user: erin
+  answerable: true
+  sources: ["acme-pay/docs|#19"]
+  answer: Bob Martinez.
+
+- question: Who approved switching the docs site to MkDocs?
+  user: erin
+  answerable: true
+  sources: ["acme-pay/docs|#12"]
+  answer: Frank Rossi, at the January all-hands.
+
+- question: Who reviewed the docs migration to MkDocs?
+  user: carol
+  answerable: true
+  sources: ["acme-pay/docs|review:1201"]
+  answer: Dave Kim.
+
+- question: Who signed off on using Keycloak for SSO?
+  user: erin
+  answerable: true
+  sources: ["acme-pay/auth|#17", "C0ENGAUTH|1778776800.000100"]
+  answer: Frank Rossi.
+
+- question: Who handles the Keycloak upgrades?
+  user: frank
+  answerable: true
+  sources: ["C0ENGAUTH|1778776800.000100"]
+  answer: Erin Walsh, every quarter.
+
+- question: Who reviewed the idempotency keys PR?
+  user: alice
+  answerable: true
+  sources: ["acme-pay/payments|review:6301", "acme-pay/payments|review_comment:6302"]
+  answer: Alice Chen approved it and Bob Martinez left a review comment.
+
+- question: Who should payments on-call escalate to?
+  user: bob
+  answerable: true
+  sources: ["acme-pay/docs|#15"]
+  answer: Alice Chen first, then Frank Rossi.
+
+# ---------------------------------------------------------------- answerable: details / follow-up style
+- question: What did Carol ask to change in the RabbitMQ queue PR?
+  user: alice
+  answerable: true
+  sources: ["acme-pay/payments|review:4202", "acme-pay/payments|review_comment:4203", "acme-pay/payments|review:4204"]
+  answer: Add a dead-letter queue and ack messages only after the charge row is committed.
+
+- question: What happens to a refund after the third failed retry?
+  user: frank
+  answerable: true
+  sources: ["acme-pay/payments|#57", "PAY|comment:1311", "C0ENGPAY|1774861500.000200"]
+  answer: It moves to the manual review queue and on-call is paged.
+
+- question: Are partial refunds also capped at 3 retries?
+  user: carol
+  answerable: true
+  sources: ["acme-pay/payments|comment:5703"]
+  answer: Yes, partial refunds go through the same refund worker.
+
+- question: How many customers were double-charged in April?
+  user: frank
+  answerable: true
+  sources: ["PAY|PAY-140"]
+  answer: 14 customers, on April 22; all were refunded the same day.
+
+- question: How long are idempotency keys kept?
+  user: carol
+  answerable: true
+  sources: ["acme-pay/payments|#63", "acme-pay/payments|review:6301"]
+  answer: 24 hours.
+
+- question: What was the p99 latency for billing calls with the gRPC flag at 10%?
+  user: frank
+  answerable: true
+  sources: ["C0ENGPAY|1782307800.000600"]
+  answer: 98ms, down from 420ms.
+
+- question: When does the gRPC billing rollout go to 100%?
+  user: bob
+  answerable: true
+  sources: ["C0ENGPAY|1782307800.000600"]
+  answer: On the Monday after the 10% stage, if the error rate stays under 0.1%.
+
+- question: How was the flaky refund backoff test fixed?
+  user: alice
+  answerable: true
+  sources: ["acme-pay/payments|comment:7801", "acme-pay/payments|#78"]
+  answer: By freezing time with freezegun; 200 CI reruns in a row were green.
+
+- question: How long was the downtime for the Postgres 16 upgrade?
+  user: alice
+  answerable: true
+  sources: ["C0ENGPAY|1787215500.000800", "acme-pay/payments|#84"]
+  answer: About 11 minutes were planned from the staging test; the actual downtime was 9 minutes.
+
+- question: When was the maintenance window for the payments database upgrade?
+  user: frank
+  answerable: true
+  sources: ["acme-pay/payments|#84", "C0ENGPAY|1787215500.000800"]
+  answer: Saturday Aug 22, 02:00 to 03:00 UTC.
+
+- question: What is our webhook retry policy?
+  user: alice
+  answerable: true
+  sources: ["acme-pay/payments|#88", "PAY|PAY-171"]
+  answer: 5 retries at 1 minute, 5 minutes, 30 minutes, 2 hours and 12 hours, then the event is marked failed and can be resent by hand.
+
+- question: How long does a merchant endpoint have to answer a webhook?
+  user: carol
+  answerable: true
+  sources: ["acme-pay/payments|#88"]
+  answer: It must return a 2xx response within 10 seconds.
+
+- question: What is the rate limit on the public API?
+  user: frank
+  answerable: true
+  sources: ["acme-pay/payments|#92", "PAY|comment:1781", "C0ENGPAY|1788444900.001000"]
+  answer: 100 requests per second per API key, with bursts up to 200.
+
+- question: What did Carol ask to change in the rate limiting PR?
+  user: alice
+  answerable: true
+  sources: ["acme-pay/payments|review:9201", "acme-pay/payments|review:9202"]
+  answer: Add a TTL to the Redis bucket keys; a 1 hour TTL was added.
+
+- question: What should on-call do if the payments queue backs up?
+  user: bob
+  answerable: true
+  sources: ["acme-pay/docs|#15"]
+  answer: If payments.charge is deeper than 5,000 messages, scale payments-worker to 12 replicas.
+
+- question: When is the payments on-call handover?
+  user: erin
+  answerable: true
+  sources: ["acme-pay/docs|#15", "C0GENERAL|1774252800.000200"]
+  answer: Every Monday at 10:00 UTC.
+
+- question: How often are JWT signing keys rotated?
+  user: erin
+  answerable: true
+  sources: ["acme-pay/auth|#23", "C0ENGAUTH|1783681200.000200"]
+  answer: Every 90 days; the next key is published in the JWKS 7 days early and the old one is kept for 24 hours.
+
+- question: How do we rotate the signing key by hand in an emergency?
+  user: dave
+  answerable: true
+  sources: ["acme-pay/auth|comment:2303"]
+  answer: Run make rotate-now, which runs the rotation job immediately and skips the 7-day pre-publish.
+
+- question: When is the first automatic signing key rotation?
+  user: erin
+  answerable: true
+  sources: ["C0ENGAUTH|1783681200.000200"]
+  answer: October 6.
+
+# ---------------------------------------------------------------- not in the data
+- question: What Kubernetes version do we run?
+  user: alice
+  answerable: false
+  sources: []
+
+- question: Who is the CEO of Acme Pay?
+  user: bob
+  answerable: false
+  sources: []
+
+- question: How much is our monthly cloud bill?
+  user: frank
+  answerable: false
+  sources: []
+
+- question: When is the next company offsite?
+  user: carol
+  answerable: false
+  sources: []
+
+- question: What framework is the checkout frontend written in?
+  user: dave
+  answerable: false
+  sources: []
+
+- question: What uptime SLA do we promise merchants?
+  user: erin
+  answerable: false
+  sources: []
+
+- question: Which Redis version does the rate limiter use?
+  user: bob
+  answerable: false
+  sources: []
+
+# ---------------------------------------------------------------- permissions: answer exists but the user may not see it
+- question: Why did we choose Keycloak over Auth0 for customer SSO?
+  user: alice
+  answerable: false
+  sources: []
+  hidden: ["acme-pay/auth|#17", "acme-pay/auth|review:1701", "acme-pay/auth|review_comment:1702", "AUTH|AUTH-21", "AUTH|comment:211", "C0ENGAUTH|1778776800.000100"]
+
+- question: Who signed off on using Keycloak for SSO?
+  user: alice
+  answerable: false
+  sources: []
+  hidden: ["acme-pay/auth|#17", "AUTH|comment:211", "C0ENGAUTH|1778776800.000100"]
+
+- question: How much did Auth0 quote us per year?
+  user: bob
+  answerable: false
+  sources: []
+  hidden: ["acme-pay/auth|#17", "AUTH|comment:211", "C0ENGAUTH|1778776800.000100"]
+
+- question: How often are JWT signing keys rotated?
+  user: carol
+  answerable: false
+  sources: []
+  hidden: ["acme-pay/auth|#23", "acme-pay/auth|review:2301", "AUTH|AUTH-34", "C0ENGAUTH|1783681200.000200"]
+
+- question: How do we rotate the signing key by hand in an emergency?
+  user: alice
+  answerable: false
+  sources: []
+  hidden: ["acme-pay/auth|comment:2302", "acme-pay/auth|comment:2303", "AUTH|AUTH-34"]
+
+- question: Which Keycloak version is running in production?
+  user: bob
+  answerable: false
+  sources: []
+  hidden: ["C0ENGAUTH|1789984800.000300", "acme-pay/auth|#17"]
+
+- question: What does AUTH-40 say?
+  user: carol
+  answerable: false
+  sources: []
+  hidden: ["AUTH|AUTH-40"]
+
+- question: Why are refund retries capped at 3?
+  user: dave
+  answerable: false
+  sources: []
+  hidden: ["acme-pay/payments|#57", "acme-pay/payments|review:5701", "PAY|PAY-131", "PAY|comment:1311", "C0ENGPAY|1774861500.000200"]
+
+- question: What is error E4012?
+  user: erin
+  answerable: false
+  sources: []
+  hidden: ["acme-pay/payments|comment:6303", "acme-pay/payments|review_comment:6302", "PAY|PAY-185", "C0ENGPAY|1781777400.000500"]

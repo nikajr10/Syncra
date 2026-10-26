@@ -13,7 +13,7 @@ from tests.fakes import fake_ollama_stream
 
 
 def test_answer_prompt_loads_from_config() -> None:
-    assert get_models_config()["answer_writer"].prompt == "answer_writer.v1"
+    assert get_models_config()["answer_writer"].prompt == "answer_writer.v2"
     prompt = get_prompt("answer_writer")
     filled = Template(prompt.prompt).substitute(evidence="E", history="H", question="Q")
     assert "<question>Q</question>" in filled and "<history>\nH\n</history>" in filled
@@ -113,3 +113,22 @@ def test_confidence_levels() -> None:
     assert confidence(_claims(True, False, False, False), relevant) == "low"  # 0.25
     assert confidence(_claims(None), relevant) == "low"  # "I don't know"
     assert confidence(_claims(), []) == "low"
+
+
+def test_an_added_explanation_is_cut_and_long_threads_are_read_line_by_line() -> None:
+    text = (
+        "slack:U02: billing_grpc flag is at 10%: p99 dropped to 98ms.\n"
+        "slack:U01: Nice. Go to 100% on Monday if the error rate stays under 0.1%.\n"
+        "slack:U02: Will do. Once it is at 100% we remove the REST client."
+    )
+    thread = Evidence("chunk", 4, text, 12, "thread", "billing_grpc flag is at 10%", None,
+                      "slack:U02", None, 2.0, "E3")  # fmt: skip
+    answer = (
+        "Orders go through a RabbitMQ queue now, which makes checkout fully serverless [E1].\n"
+        "The gRPC billing rollout goes to 100% on Monday if the error rate stays under 0.1% [E3]."
+    )
+    checked = check(answer, [EVIDENCE[0], thread])
+    assert checked.text == (
+        "Orders go through a RabbitMQ queue now [E1].\n"
+        "The gRPC billing rollout goes to 100% on Monday if the error rate stays under 0.1% [E3]."
+    )

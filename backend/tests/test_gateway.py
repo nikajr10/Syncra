@@ -132,3 +132,30 @@ def test_download_all_fetches_every_hf_model_and_skips_gated(
     encoder = download.hf_models()["entity_finder_encoder"]
     assert files[encoder.name] == ["config.json", "spm.model", "tokenizer_config.json"]
     assert files["urchade/gliner_small-v2.1"] is None  # whole repo
+
+
+def test_warm_up_loads_every_chat_model_and_survives_failures(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    loaded: list[str] = []
+
+    def load(role: str) -> None:
+        loaded.append(role)
+        if role == "prompt_guard":
+            raise OSError("gated: no HF_TOKEN")
+
+    for loader in ("load_sentence_transformer", "load_cross_encoder", "load_setfit",
+                   "load_classifier"):  # fmt: skip
+        monkeypatch.setattr(gateway, loader, load)
+    sent: list[dict] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        sent.append(json.loads(request.content))
+        return httpx.Response(200, json={"done": True})
+
+    monkeypatch.setattr(gateway, "chat_ollama", lambda: _client(handler))
+    gateway.warm_up()  # the guard failing doesn't stop the rest
+
+    assert loaded == ["embedder", "reranker", "claim_checker", "intent_router", "prompt_guard"]
+    assert sorted(b["model"] for b in sent) == ["qwen3:4b", "qwen3:8b"]
+    assert all(b["keep_alive"] == "30m" and "prompt" not in b for b in sent)
