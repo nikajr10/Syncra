@@ -4,11 +4,39 @@ Live record of what has been built. Agents add an entry here after every task (f
 
 ## Current status
 
-- **Current phase:** Phase 9 — Web app, backend part (Phase 8 complete)
-- **Next task:** 9.4 backend (sources and settings API); 9.1–9.3 are frontend, kept as is by the user's request
-- **Completed tasks:** 0.1–0.6, 1.1–1.6, 2.1–2.3, 3.1–3.4, 4.1–4.4, 5.1–5.3, 5.5, 5.6, 6.1–6.5, 7.1–7.5, 8.1–8.2 (5.4 real model waits for HF_TOKEN)
+- **Current phase:** Phase 10 — Quality and launch (Phase 9: backend part done, frontend kept as is)
+- **Next task:** 10.1 — Demo data
+- **Completed tasks:** 0.1–0.6, 1.1–1.6, 2.1–2.3, 3.1–3.4, 4.1–4.4, 5.1–5.3, 5.5, 5.6, 6.1–6.5, 7.1–7.5, 8.1–8.2, 9.4 backend (5.4 real model waits for HF_TOKEN; 9.1–9.3 frontend kept as is)
 
 ## Log
+
+### Task 9.4 — Sources and settings (backend only)  ⚠️ partly done
+**Date:** 2026-10-26
+
+**Built**
+- `app/api/admin.py` (router `/admin`, tag Admin): every endpoint needs an admin (`users.is_admin`), anyone else gets 403.
+  - `GET /admin/sources` → which tools have credentials in `.env`, and each source with `enabled`, `last_synced_at`, `last_error`, item count and member count.
+  - `POST /admin/sources` `{kind, external_id, name?}` → a new source (the id is checked with the connectors' patterns: 422; already added: 409). It syncs with the next learning run.
+  - `PATCH /admin/sources/{id}` `{enabled}` pauses or resumes one.
+  - `POST /admin/sources/{id}/sync` (202) syncs it right after answering (a background task with its own session); a failure lands in `last_error`.
+  - `GET /admin/users` → users, admin flag and linked accounts; `POST /admin/users/{username}/accounts` links one (404 unknown user, 422 bad id or already someone else's).
+- `add_user(…, is_admin=)` and `make add-user` asks whether the new user is an admin (before, nobody could be one).
+- `tests/test_admin.py`: an admin adds a source, syncs it and sees the time, items and members; a failing source shows its error; bad ids, duplicates, pausing and a missing source; linking accounts; every admin endpoint answers 403 to a normal user.
+- README: sources are added through the API now (no SQL), the access each tool's token needs, and a Chat section.
+
+**Key files**
+- `backend/app/api/admin.py`, `backend/app/api/auth.py`, `backend/app/api/main.py`, `backend/scripts/users.py`, `backend/tests/test_admin.py`, `README.md`
+
+**Decisions**
+- The user asked to keep the frontend as it is, so Tasks 9.1–9.3 (frontend) and the screens of 9.4 are not built; this task delivers the backend those screens need.
+- Credentials stay in `.env`; the API only reports whether each tool is configured. Entering tokens through the web would mean storing secrets in the database.
+- No "list the repos / projects / channels the token can see" endpoint yet: the admin types the id. Add it with the real screens.
+
+**How to run / test**
+- `make add-user` (answer `y` for admin) · `make run` → `/docs` → Admin · `make test`
+
+**Known issues / TODO**
+- Screens for this (and 9.1–9.3) wait until the user wants the frontend wired to the backend. The prototype in `frontend/` is unchanged.
 
 ### Task 8.2 — Approve / reject and run  ✅ done
 **Date:** 2026-10-26

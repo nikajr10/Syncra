@@ -7,7 +7,7 @@ from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from app.api import actions, auth, chat
+from app.api import actions, admin, auth, chat
 from app.config.settings import get_models_config, get_settings
 
 log = logging.getLogger("syncra.api")
@@ -45,6 +45,10 @@ TAGS = [
         "name": "Actions",
         "description": "Approval cards: what Syncra offered to do for you. Nothing runs until "
         "you approve it.",
+    },
+    {
+        "name": "Admin",
+        "description": "Admins only: connect sources, watch them sync, link people's accounts.",
     },
     {"name": "Health", "description": "Is the API up? No login needed."},
 ]
@@ -101,3 +105,4 @@ def health() -> Health:
 app.include_router(auth.router)
 app.include_router(chat.router)
 app.include_router(actions.router)
+app.include_router(admin.router)

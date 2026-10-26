@@ -159,7 +159,9 @@ def me(user: CurrentUser, session: DB) -> Me:
 # --- admin (scripts/users.py) ---------------------------------------------------------------
 
 
-def add_user(session: Session, username: str, password: str, display_name: str = "") -> User:
+def add_user(
+    session: Session, username: str, password: str, display_name: str = "", is_admin: bool = False
+) -> User:
     username = username.strip().lower()
     if not USERNAME.fullmatch(username):
         raise ValueError("A username is letters, digits, '.', '_' or '-' (at most 100).")
@@ -171,6 +173,7 @@ def add_user(session: Session, username: str, password: str, display_name: str =
         username=username,
         display_name=display_name.strip() or None,
         password_hash=hash_password(password),
+        is_admin=is_admin,
     )
     session.add(user)
     session.commit()

@@ -40,26 +40,35 @@ Every API endpoint except `/health` needs a login. An admin creates each user an
 
 ```bash
 cd backend
-make add-user         # asks for a username, a display name and a password
+make add-user         # asks for a username, a display name, a password and whether it's an admin
 make link-account     # asks for the username, the tool (github, jira or slack) and the account id
 ```
 
-The account id is the GitHub login, the Jira accountId, or the Slack member id (`U0123…`, from the person's Slack profile → ⋮ → Copy member ID). The next learning run merges a user's accounts into one person.
+Admins can also link accounts through the API (`POST /admin/users/{username}/accounts`, see `/docs`). The account id is the GitHub login, the Jira accountId, or the Slack member id (`U0123…`, from the person's Slack profile → ⋮ → Copy member ID). The next learning run merges a user's accounts into one person.
 
 `POST /auth/login` with `{"username": "…", "password": "…"}` returns a token. Send it as `Authorization: Bearer <token>` until it expires (`TOKEN_TTL_HOURS`, 12 by default); `POST /auth/logout` ends it and `GET /me` shows who is logged in. In `/docs`, click **Authorize** and paste the token.
 
 ## Connect a source
 
-Put the credentials in `backend/.env` (`GITHUB_TOKEN`, `JIRA_BASE_URL` + `JIRA_EMAIL` + `JIRA_API_TOKEN`, `SLACK_BOT_TOKEN` + `SLACK_WORKSPACE_URL`) and insert one row per repo / project / channel into the `sources` table (a UI comes in Phase 9):
+Put the credentials in `backend/.env` (`GITHUB_TOKEN`, `JIRA_BASE_URL` + `JIRA_EMAIL` + `JIRA_API_TOKEN`, `SLACK_BOT_TOKEN` + `SLACK_WORKSPACE_URL`). Then, logged in as an admin in `/docs`, add one source per repo / project / channel with `POST /admin/sources`:
 
-```sql
-insert into sources (kind, name, external_id) values
-  ('github', 'acme/payments', 'acme/payments'),   -- owner/repo
-  ('jira',   'PAY',           'PAY'),             -- project key
-  ('slack',  '#eng-payments', 'C0123456789');     -- channel id
+```json
+{"kind": "github", "external_id": "acme/payments"}
+{"kind": "jira",   "external_id": "PAY"}
+{"kind": "slack",  "external_id": "C0123456789", "name": "#eng-payments"}
 ```
 
+`GET /admin/sources` shows which tools have credentials, and each source's last sync, last error, item count and member count. `POST /admin/sources/{id}/sync` syncs one right away; `PATCH /admin/sources/{id}` with `{"enabled": false}` pauses it.
+
+Syncra only shows a user what their linked accounts can see in the tool itself, so each sync also reads who can see the source. The GitHub token needs push access to private repos (to list collaborators), the Slack bot needs `channels:read` / `groups:read`, and the Jira user must be allowed to see project permissions.
+
 `make worker` then, every `SYNC_INTERVAL_MINUTES`, pulls new items, scrubs personal data and secrets, drops noise and learns from the rest: chunks with vectors and a keyword index, entities, decisions and the links between them. It needs Ollama running and `make train-triage` done once. Each item's `status` ends up `processed` or `noise`; `failed` ones (e.g. Ollama was down) are retried on the next run.
+
+## Chat
+
+Logged in, start a chat with `POST /chat/sessions`, then send messages to `POST /chat/sessions/{id}/messages`. The reply's `path` says what happened: small talk gets an instant reply; a question gets an answer citing its `sources` as `[E1]`…, with a `confidence` (high, medium or low) and suggested `follow_ups`; a request like "open a Jira ticket to …" gets an approval card (`action`). `…/messages/stream` sends the same reply as Server-Sent Events, word by word. Approve or reject a card with `POST /actions/{id}/approve` or `…/reject`; nothing is created before that.
+
+The chat needs Ollama running, `make train-intent-router` done once, and `HF_TOKEN` in `backend/.env` for the prompt guard (Meta's Llama Prompt Guard 2 is gated: accept its licence on Hugging Face, then `make download-models`).
 
 ## Production (Docker)
 

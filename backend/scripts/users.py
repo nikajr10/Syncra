@@ -1,7 +1,7 @@
 """Admin: create Syncra users and link their GitHub / Jira / Slack accounts.
 
 Usage (from backend/):
-  make add-user        asks for a username, a display name and a password
+  make add-user        asks for a username, a display name, a password and whether it's an admin
   make link-account    asks for a username, a tool (github, jira or slack) and the account id
 """
 
@@ -20,7 +20,9 @@ def main(command: str) -> str:
             password = getpass("Password (at least 8 characters): ")
             if getpass("Password again: ") != password:
                 raise ValueError("The passwords don't match.")
-            return f"Created user {add_user(session, username, password, display_name).username}."
+            admin = input("Admin, who may add sources and link accounts? (y/N): ").lower() == "y"
+            user = add_user(session, username, password, display_name, admin)
+            return f"Created {'admin' if admin else 'user'} {user.username}."
         username = input("Username: ")
         tool = input("Tool (github, jira or slack): ")
         print("Account id: GitHub login, Jira accountId or Slack member id (U0123ABCD).")
