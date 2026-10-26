@@ -17,6 +17,7 @@ from zoneinfo import ZoneInfo
 import httpx
 
 from app.config.settings import ConfigError, get_settings
+from app.db.schema import access_tag
 from app.learning.connectors.base import RawItem
 
 log = logging.getLogger("syncra.learning.jira")
@@ -129,7 +130,7 @@ class JiraConnector:
             jql += f' AND updated >= "{local.strftime("%Y-%m-%d %H:%M")}"'
         jql += " ORDER BY updated ASC"
 
-        tags = (f"jira:project:{self.project_key}",)
+        tags = (access_tag("jira", self.project_key),)
         latest = _parse(since_cursor) if since_cursor else None
         items: list[RawItem] = []
         for issue in self._search(jql):
@@ -141,6 +142,20 @@ class JiraConnector:
             latest = updated if latest is None or updated > latest else latest
         cursor = latest.strftime("%Y-%m-%dT%H:%M:%S.%f%z") if latest else since_cursor
         return items, cursor
+
+    def members(self) -> list[str]:
+        """Everyone with the Browse Projects permission on the project."""
+        params: dict[str, Any] = {
+            "projectKey": self.project_key, "permissions": "BROWSE_PROJECTS",
+            "maxResults": PAGE_SIZE, "startAt": 0,
+        }  # fmt: skip
+        accounts: list[str] = []
+        while page := self._get("/rest/api/3/user/permission/search", params):
+            accounts += [f"jira:{u['accountId']}" for u in page if u.get("accountId")]
+            if len(page) < PAGE_SIZE:
+                break
+            params["startAt"] += len(page)
+        return accounts
 
     # --- mapping -------------------------------------------------------------------------
 

@@ -47,3 +47,6 @@ class Connector(Protocol):
         Re-running with the returned cursor must fetch nothing new. Return the same cursor
         back when there is nothing new.
         """
+
+    def members(self) -> list[str]:
+        """The accounts that may see this source (`slack:U01`, `github:alice`, `jira:<id>`)."""

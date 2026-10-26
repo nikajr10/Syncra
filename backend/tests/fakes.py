@@ -64,6 +64,9 @@ class FakeConnector:
         new = [i for i in self.items if int(i.external_id) > start]
         return new, (new[-1].external_id if new else since_cursor)
 
+    def members(self) -> list[str]:
+        return ["slack:U1"]
+
 
 class Feed:
     """A source whose items arrive in order: each fetch returns what it hasn't handed out yet."""
@@ -74,6 +77,9 @@ class Feed:
     def fetch_new(self, since_cursor: str | None) -> tuple[list[RawItem], str | None]:
         start = int(since_cursor or 0)
         return self.items[start:], str(len(self.items))
+
+    def members(self) -> list[str]:
+        return ["slack:U1"]
 
 
 def graph_links(session: Session) -> list[tuple[str, str, str]]:

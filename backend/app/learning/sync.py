@@ -99,6 +99,7 @@ def sync_source(
     cursor = session.get(SyncCursor, source.id)
     items, next_cursor = connector.fetch_new(cursor.cursor if cursor else None)
     items = [scrub(item) for item in items]
+    source.members = sorted(set(connector.members()))  # saved with the items, in one commit
     changed = save_items(session, source, items, next_cursor)
     log.info(
         "sync %s %s: fetched=%d changed=%d cursor=%s",

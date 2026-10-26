@@ -4,11 +4,36 @@ Live record of what has been built. Agents add an entry here after every task (f
 
 ## Current status
 
-- **Current phase:** Phase 6 — Find evidence (Phase 5 done except the real Prompt Guard run)
-- **Next task:** 6.1 — Permission filter
-- **Completed tasks:** 0.1–0.6, 1.1–1.6, 2.1–2.3, 3.1–3.4, 4.1–4.4, 5.1–5.3, 5.5, 5.6 (5.4 code done, real model waits for HF_TOKEN)
+- **Current phase:** Phase 6 — Find evidence
+- **Next task:** 6.2 — Vector search
+- **Completed tasks:** 0.1–0.6, 1.1–1.6, 2.1–2.3, 3.1–3.4, 4.1–4.4, 5.1–5.3, 5.5, 5.6, 6.1 (5.4 real model waits for HF_TOKEN)
 
 ## Log
+
+### Task 6.1 — Permission filter  ✅ done
+**Date:** 2026-10-26
+
+**Built**
+- Migration 0004: `sources.members` (text array, GIN index), the accounts that may see a source's items.
+- Every connector has `members()`: Slack `conversations.members`, GitHub `/repos/{repo}/collaborators` (nobody for a public repo: its items are tagged `public`), Jira users with `BROWSE_PROJECTS` (`/rest/api/3/user/permission/search`). `sync_source` stores them in the same commit as the items.
+- `app/chat/permissions.py`: `user_tags(session, user_id)` → `public` plus the tag of every source one of the user's linked accounts belongs to; `visible(tags)` → the WHERE condition `items.access_tags && tags`, used inside every search query.
+- `access_tag(kind, external_id)` in `app/db/schema.py` (and `Source.access_tag`): the one place the `github:repo:…` / `jira:project:…` / `slack:channel:…` tags are built; the connectors use it.
+- `tests/test_permissions.py`: a user without access to a private repo or channel never gets its chunks, a user with no linked accounts sees only public items, leaving a channel takes effect at the next sync, and each connector lists members from mocked API answers.
+
+**Key files**
+- `backend/app/chat/permissions.py`, `backend/migrations/versions/0004_source_members.py`, `backend/app/learning/connectors/*.py`, `backend/app/learning/sync.py`, `backend/tests/test_permissions.py`
+
+**Decisions**
+- Membership is stored on the source and refreshed every sync, not checked against the tools while chatting: no API calls on the chat path, and the filter stays one array overlap in SQL.
+- No admin bypass: admins see what their own accounts can see.
+- A source whose member list can't be read fails its sync (fail closed); the previous member list stays until the next good sync.
+
+**How to run / test**
+- `make migrate` · `make test`
+
+**Known issues / TODO**
+- The GitHub token needs push access to list a private repo's collaborators; the Slack bot needs `channels:read` / `groups:read`; the Jira user needs permission to see project permissions.
+- Access changes take up to one sync interval (15 min) to reach Syncra.
 
 ### Task 5.6 — Chat endpoint (skeleton)  ✅ done
 **Date:** 2026-10-26

@@ -105,7 +105,23 @@ class Source(Base):
     enabled: Mapped[bool] = mapped_column(Boolean, server_default=sqltext("true"))
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_error: Mapped[str | None] = mapped_column(Text)
+    members: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), server_default=sqltext("'{}'::text[]")
+    )  # accounts that may see its items, refreshed every sync (migration 0004)
     created_at: Mapped[datetime] = _created_at()
+
+    @property
+    def access_tag(self) -> str:
+        """The tag its items carry: `github:repo:org/x`, `jira:project:PAY`, `slack:channel:C1`."""
+        return access_tag(self.kind, self.external_id)
+
+
+TAG_SCOPE = {"github": "repo", "jira": "project", "slack": "channel"}
+
+
+def access_tag(kind: str, external_id: str) -> str:
+    """The tag every item of a source carries, e.g. `slack:channel:C1`."""
+    return f"{kind}:{TAG_SCOPE[kind]}:{external_id}"
 
 
 class SyncCursor(Base):

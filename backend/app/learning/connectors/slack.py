@@ -17,6 +17,7 @@ from typing import Any
 import httpx
 
 from app.config.settings import ConfigError, get_settings
+from app.db.schema import access_tag
 from app.learning.connectors.base import RawItem
 
 log = logging.getLogger("syncra.learning.slack")
@@ -102,7 +103,7 @@ class SlackConnector:
             log.info("skipping direct-message conversation %s", self.channel_id)
             return [], since_cursor
 
-        tags = (f"slack:channel:{self.channel_id}",)
+        tags = (access_tag("slack", self.channel_id),)
         since = float(since_cursor) if since_cursor else 0.0
         latest = since
         params: dict[str, Any] = {"channel": self.channel_id, "limit": PAGE_SIZE}
@@ -136,6 +137,10 @@ class SlackConnector:
                 items.append(self._message(message, tags))
 
         return items, (f"{latest:.6f}" if latest else since_cursor)
+
+    def members(self) -> list[str]:
+        params = {"channel": self.channel_id, "limit": PAGE_SIZE}
+        return [f"slack:{m}" for m in self._paged("conversations.members", params, "members")]
 
     # --- mapping -------------------------------------------------------------------------
 

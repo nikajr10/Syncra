@@ -15,6 +15,7 @@ from typing import Any
 import httpx
 
 from app.config.settings import ConfigError, get_settings
+from app.db.schema import access_tag
 from app.learning.connectors.base import RawItem
 
 log = logging.getLogger("syncra.learning.github")
@@ -137,8 +138,14 @@ class GitHubConnector:
 
     def _access_tags(self) -> tuple[str, ...]:
         repo = self._get(f"/repos/{self.repo}").json()
-        tag = f"github:repo:{self.repo}"
+        tag = access_tag("github", self.repo)
         return (tag,) if repo.get("private", True) else ("public", tag)
+
+    def members(self) -> list[str]:
+        """Everyone with access to a private repo; nobody for a public one (tagged `public`)."""
+        if not self._get(f"/repos/{self.repo}").json().get("private", True):
+            return []
+        return [f"github:{u['login']}" for u in self._paged(f"/repos/{self.repo}/collaborators")]
 
     @staticmethod
     def _login(user: dict[str, Any] | None) -> str | None:
