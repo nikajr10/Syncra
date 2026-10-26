@@ -29,6 +29,12 @@ _VALUE = (
     r"""(?:"[^"\n]{6,}"|'[^'\n]{6,}'"""
     r"""|(?=[A-Za-z0-9_\-+/=!@#$%^&*]{8,}(?:\s|$))(?=\S*\d)[A-Za-z0-9_\-+/=!@#$%^&*]{8,})"""
 )
+# After "password=", a plain word is a password too (`password=hunter2`); code still survives
+# because calls, attributes and short type names don't match (`password=get_pw()`, `pwd: str`).
+_PASSWORD = (
+    r"""(?:"[^"\n]{6,}"|'[^'\n]{6,}'"""
+    r"""|(?=[A-Za-z0-9_\-+/=!@#$%^&*]{6,}(?:\s|$))[A-Za-z0-9_\-+/=!@#$%^&*]{6,})"""
+)
 SECRET_PATTERNS: dict[str, str] = {
     "AWS_ACCESS_KEY": r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b",
     "GITHUB_TOKEN": (
@@ -38,8 +44,8 @@ SECRET_PATTERNS: dict[str, str] = {
     "PRIVATE_KEY": r"-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----",
     "CONNECTION_STRING": r"\b[a-z][a-z0-9+.-]*://[^\s/:@]+:[^\s@]+@[^\s]+",
     "PASSWORD_ASSIGNMENT": (
-        r"(?i)(?<![A-Za-z])(?:password|passwd|pwd|secret|api[_-]?key|access[_-]?key|"
-        r"auth[_-]?token|token)\s*[:=]\s*" + _VALUE
+        r"(?i)(?<![A-Za-z])(?:(?:secret|api[_-]?key|access[_-]?key|auth[_-]?token|token)"
+        r"\s*[:=]\s*" + _VALUE + r"|(?:password|passwd|pwd)\s*[:=]\s*" + _PASSWORD + ")"
     ),
     "JWT": r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b",
 }

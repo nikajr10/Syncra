@@ -505,7 +505,7 @@ flowchart LR
 **Phase 10 — Quality and launch**
 - [ ] 10.1 Demo data
 - [ ] 10.2 Evaluation set and runner
-- [ ] 10.3 Permission and safety tests
+- [x] 10.3 Permission and safety tests
 - [ ] 10.4 Speed tuning
 - [ ] 10.5 Monitoring and logs
 - [ ] 10.6 Final docs

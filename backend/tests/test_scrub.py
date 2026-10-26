@@ -40,6 +40,7 @@ def scrubber() -> Scrubber:
         ("token xoxb-" + "123456789012-1234567890123-AbCdEfGhIjKlMnOpQrStUvWx", "<SLACK_TOKEN>"),
         ("db is postgres://app:s3cretPw@db.internal:5432/prod", "<CONNECTION_STRING>"),
         ('set password = "hunter2!"', "<PASSWORD_ASSIGNMENT>"),
+        ("db password=hunter2 for now", "<PASSWORD_ASSIGNMENT>"),
         ("AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY", "<PASSWORD_ASSIGNMENT>"),
         ("card 4111 1111 1111 1111 was charged", "<CREDIT_CARD>"),
         (
@@ -69,6 +70,7 @@ def test_personal_data_and_secrets_are_masked(
         "see PAY-1234 and PR #42 by alice; reviewed by Bob Smith",
         "commit 3f2a9c1d4e5b6a7f8091a2b3c4d5e6f708192a3b fixes v2.3.1",
         "api_key = settings.api_key; token = get_token()",
+        "connect(password=get_password(), pwd: str)",
         "health at http://localhost:8000/health returned 200",
         "RabbitMQ queue between checkout and the payment service",
     ],
