@@ -6,6 +6,9 @@ from sqlalchemy.orm import Session
 
 from app.chat import search
 from app.db.schema import Chunk, Item, Source
+from app.learning.decisions import FoundDecision
+from app.learning.entities import FoundEntity
+from app.learning.graph import write_graph
 from app.models import gateway
 
 PUBLIC = ["public"]
@@ -72,3 +75,51 @@ def test_keyword_search_finds_exact_terms(db_session: Session) -> None:
     queue = search.keyword_search(db_session, PUBLIC, "checkout queue")
     assert "#42" in _titles(queue) and "secret" not in _titles(queue)  # not visible
     assert search.keyword_search(db_session, PUBLIC, "the and of?") == []  # only stop words
+
+
+def _pr(session: Session, repo: str, tags: list[str]) -> list[Item]:
+    """A PR about the payment queue by alice, reviewed by bob, learned into the graph."""
+    source = Source(kind="github", name=repo, external_id=repo)
+    session.add(source)
+    session.flush()
+    rows = [
+        Item(source_id=source.id, external_id="#42", type="pr", author="github:alice",
+             title="Add the payment queue", text="Orders go through the payment queue now.",
+             access_tags=tags),
+        Item(source_id=source.id, external_id="review:1", type="review", author="github:bob",
+             text="approved: LGTM, the retry limit looks right", parent_external_id="#42",
+             access_tags=tags),
+    ]  # fmt: skip
+    session.add_all(rows)
+    session.flush()
+    chunks = [Chunk(item_id=i.id, position=0, text=i.full_text) for i in rows]
+    session.add_all(chunks)
+    session.flush()
+    found = [[FoundEntity("payment queue", "service", 0.9)], []]
+    decision = FoundDecision(decision="Send orders through the payment queue",
+                             reason="the provider times out", people=["github:alice"])  # fmt: skip
+    write_graph(session, rows, chunks, found, decision)
+    session.commit()
+    return rows
+
+
+def test_graph_search_follows_links_to_the_review(db_session: Session) -> None:
+    _pr(db_session, "acme/payments", PUBLIC)
+
+    found = search.graph_search(db_session, PUBLIC, "who reviewed the payment queue PR?")
+
+    texts = [e.text for e in found]
+    assert "approved: LGTM, the retry limit looks right" in texts  # two links: entity → PR → review
+    review = next(e for e in found if e.text.startswith("approved"))
+    assert review.author == "github:bob" and review.score == 0.5
+    decision = next(e for e in found if e.kind == "decision")
+    assert decision.text.startswith("Decision: Send orders through the payment queue")
+    assert decision.score == 1.0  # about the payment queue: one link
+    assert len({e.key for e in found}) == len(found)
+    assert search.graph_search(db_session, PUBLIC, "who likes coffee?") == []
+
+
+def test_graph_search_respects_permissions(db_session: Session) -> None:
+    _pr(db_session, "acme/secret", ["github:repo:acme/secret"])
+    assert search.graph_search(db_session, PUBLIC, "who reviewed the payment queue PR?") == []
+    assert search.graph_search(db_session, ["github:repo:acme/secret"], "payment queue") != []

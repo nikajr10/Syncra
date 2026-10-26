@@ -6,6 +6,7 @@ its SQL query (`permissions.visible`), so hidden items are never fetched, ranked
 - `vector_search` (6.2): the question's embedding against the chunks' HNSW index.
 - `keyword_search` (6.3): PostgreSQL full-text search on the chunks' GIN index; exact ids
   (`PAY-1234`), function names (`charge_card`) and error codes (`E4012`) must all match.
+- `graph_search` (6.4): entities named in the question, then the knowledge graph 1–2 links out.
 """
 
 from __future__ import annotations
@@ -15,13 +16,14 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal
 
-from sqlalchemy import Text, cast, func, select, text
+from sqlalchemy import Text, and_, cast, func, or_, select, text
 from sqlalchemy.dialects.postgresql import TSQUERY
 from sqlalchemy.orm import Session
 
 from app.chat.permissions import visible
 from app.config.settings import get_settings
-from app.db.schema import Chunk, Item
+from app.db.schema import Chunk, Decision, Edge, EntityAlias, Item
+from app.learning.link import key, keys_in
 from app.models import gateway
 
 # ids, function names, error codes: a word with a digit, an underscore or an inner capital
@@ -100,3 +102,104 @@ def keyword_search(
         .limit(_limit(limit))
     ).all()
     return [_chunk(chunk, item, r) for chunk, item, r in rows]
+
+
+def named_entities(session: Session, question: str) -> set[int]:
+    """The entities whose name (any alias) appears in `question`, compared by `link.key`, the
+    same normalisation the learning pipeline merged names with (`payments-svc` = `PaymentService`).
+    """
+    # ponytail: every name alias is loaded per question; store alias keys in the table if
+    # entities reach the tens of thousands (same ceiling as link._name_aliases).
+    wanted = keys_in(question)
+    aliases = session.execute(
+        select(EntityAlias.alias, EntityAlias.entity_id).where(EntityAlias.source_kind.is_(None))
+    )
+    return {entity_id for alias, entity_id in aliases if key(alias) in wanted}
+
+
+def graph_search(
+    session: Session, tags: list[str], question: str, limit: int | None = None
+) -> list[Evidence]:
+    """Evidence 1–2 links away from the entities the question names.
+
+    One link: chunks that mention them, items they authored or reviewed, decisions they made or
+    that are about them. Two links: the replies, reviews and decisions of those items. One-link
+    evidence scores 1, two-link evidence 0.5; the reranker orders them later.
+    """
+    entities = named_entities(session, question)
+    if not entities:
+        return []
+    from_entity = and_(Edge.src_type == "entity", Edge.src_id.in_(entities))
+    mentions = select(Edge.src_id).where(
+        Edge.relation == "mentions", Edge.dst_type == "entity", Edge.dst_id.in_(entities)
+    )
+    near_items = {  # items one link away: those with a mentioning chunk, authored or reviewed
+        *session.scalars(select(Chunk.item_id).where(Chunk.id.in_(mentions))),
+        *session.scalars(select(Edge.dst_id).where(from_entity, Edge.dst_type == "item")),
+        *session.scalars(select(Edge.item_id).where(from_entity, Edge.dst_type == "item")),
+    }
+    near_decisions = select(Edge.dst_id).where(from_entity, Edge.relation == "decided")
+    about = select(Edge.src_id).where(
+        Edge.src_type == "decision", Edge.relation == "about", Edge.dst_type == "entity",
+        Edge.dst_id.in_(entities),
+    )  # fmt: skip
+    parents = select(Item.source_id, Item.external_id).where(Item.id.in_(near_items))
+    far_items = set(
+        session.scalars(
+            select(Item.id).where(
+                or_(
+                    Item.id.in_(select(Edge.item_id).where(  # reviews and authorship evidence
+                        Edge.dst_type == "item", Edge.dst_id.in_(near_items))),
+                    Item.parent_external_id.is_not(None)
+                    & func.row(Item.source_id, Item.parent_external_id).in_(parents),  # replies
+                )
+            )
+        )
+    ) - near_items  # fmt: skip
+
+    found = [
+        *_decisions(session, tags, Decision.id.in_(near_decisions.union(about)), 1.0),
+        *_chunks(session, tags, or_(Chunk.id.in_(mentions), Chunk.item_id.in_(near_items)), 1.0),
+        *_decisions(session, tags, Decision.item_id.in_(near_items), 0.5),
+        *_chunks(session, tags, Chunk.item_id.in_(far_items), 0.5),
+    ]
+    unique = {e.key: e for e in reversed(found)}  # first (best) score wins
+    return sorted(unique.values(), key=lambda e: -e.score)[: _limit(limit)]
+
+
+def _chunks(session: Session, tags: list[str], where: object, score: float) -> list[Evidence]:
+    rows = session.execute(
+        select(Chunk, Item).join(Item, Item.id == Chunk.item_id).where(visible(tags), where)
+        .order_by(Chunk.item_id, Chunk.position).limit(_limit(None))
+    ).all()  # fmt: skip
+    return [_chunk(chunk, item, score) for chunk, item in rows]
+
+
+def _decisions(session: Session, tags: list[str], where: object, score: float) -> list[Evidence]:
+    rows = session.execute(
+        select(Decision, Item).join(Item, Item.id == Decision.item_id).where(visible(tags), where)
+        .order_by(Decision.id).limit(_limit(None))
+    ).all()  # fmt: skip
+    return [
+        Evidence(
+            "decision",
+            d.id,
+            decision_text(d),
+            item.id,
+            item.title,
+            d.link or item.link,
+            item.author,
+            d.decided_at or item.created_at,
+            score,
+        )  # fmt: skip
+        for d, item in rows
+    ]
+
+
+def decision_text(d: Decision) -> str:
+    lines = [f"Decision: {d.decision}"]
+    if d.reason:
+        lines.append(f"Reason: {d.reason}")
+    if d.people:
+        lines.append(f"Decided by: {', '.join(d.people)}")
+    return "\n".join(lines)

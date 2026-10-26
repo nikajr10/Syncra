@@ -5,10 +5,32 @@ Live record of what has been built. Agents add an entry here after every task (f
 ## Current status
 
 - **Current phase:** Phase 6 — Find evidence
-- **Next task:** 6.4 — Graph search
-- **Completed tasks:** 0.1–0.6, 1.1–1.6, 2.1–2.3, 3.1–3.4, 4.1–4.4, 5.1–5.3, 5.5, 5.6, 6.1–6.3 (5.4 real model waits for HF_TOKEN)
+- **Next task:** 6.5 — Merge and rerank
+- **Completed tasks:** 0.1–0.6, 1.1–1.6, 2.1–2.3, 3.1–3.4, 4.1–4.4, 5.1–5.3, 5.5, 5.6, 6.1–6.4 (5.4 real model waits for HF_TOKEN)
 
 ## Log
+
+### Task 6.4 — Graph search  ✅ done
+**Date:** 2026-10-26
+
+**Built**
+- `search.named_entities(session, question)`: the entities whose name or any alias appears in the question, compared with `link.key` (the normalisation the learning pipeline merged names with, so "payments-svc" in a question finds `PaymentService`).
+- `search.graph_search(session, tags, question, limit)`: from those entities, one link out (chunks that mention them, items they authored or reviewed, decisions they made or that are about them, score 1) and two links out (the reviews, replies and decisions of those items, score 0.5). Every chunk and decision is permission-filtered through its item. Decisions come back as evidence text (`Decision: … / Reason: … / Decided by: …`).
+- Tests: "who reviewed the payment queue PR?" returns bob's review (entity → PR → review) and the decision about the payment queue, without duplicates; an unknown name returns nothing; the same PR in a private repo is invisible without its tag.
+
+**Key files**
+- `backend/app/chat/search.py`, `backend/tests/test_search.py`
+
+**Decisions**
+- Names in the question are found by alias lookup only, without running GLiNER on the question. GLiNER's spans are word runs, and `keys_in` already checks every run of up to 6 words against the aliases, so GLiNER could only add names the graph doesn't know (and that can't match anything). This saves a model call per question; it is a deviation from description.md §5 the user may reverse.
+- Replies are found through `parent_external_id`, reviews through the `reviewed` link's evidence item.
+
+**How to run / test**
+- `make test`
+
+**Known issues / TODO**
+- All name aliases are loaded per question (same ceiling as entity linking): fine for thousands of entities.
+- Short common names (an entity called "api") match many questions; the reranker filters what isn't relevant.
 
 ### Task 6.3 — Keyword search  ✅ done
 **Date:** 2026-10-26
