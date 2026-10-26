@@ -75,6 +75,10 @@ class Settings(BaseSettings):
     #     (qwen3:4b runs with 4096 tokens of context in Ollama) ---
     rewriter_max_chars: int = 4000
 
+    # --- search: each of the three searches (vector, keyword, graph) returns up to this many
+    #     pieces of evidence; the reranker then keeps the best TOP_K_EVIDENCE ---
+    search_candidates: int = 20
+
     # --- login: a bearer token stops working this many hours after it was handed out ---
     token_ttl_hours: int = 12
 

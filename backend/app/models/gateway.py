@@ -217,12 +217,19 @@ def load_cross_encoder(role: str):  # noqa: ANN201 - heavy import kept lazy
     return model
 
 
-def embed(role: str, texts: list[str], batch_size: int = 32) -> list[list[float]]:
-    """Normalised embeddings for `texts` with the model configured for `role`."""
+def embed(
+    role: str, texts: list[str], batch_size: int = 32, prompt_name: str | None = None
+) -> list[list[float]]:
+    """Normalised embeddings for `texts` with the model configured for `role`. `prompt_name`
+    picks one of the model's own prompts, e.g. "query" for a search question (Qwen3-Embedding)."""
     started = time.perf_counter()
     model = load_sentence_transformer(role)
     vectors = model.encode(
-        texts, batch_size=batch_size, normalize_embeddings=True, convert_to_numpy=True
+        texts,
+        batch_size=batch_size,
+        normalize_embeddings=True,
+        convert_to_numpy=True,
+        prompt_name=prompt_name,
     )
     _log_call(get_models_config()[role].name, started, items=len(texts))
     return vectors.tolist()

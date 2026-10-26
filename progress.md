@@ -5,10 +5,32 @@ Live record of what has been built. Agents add an entry here after every task (f
 ## Current status
 
 - **Current phase:** Phase 6 — Find evidence
-- **Next task:** 6.2 — Vector search
-- **Completed tasks:** 0.1–0.6, 1.1–1.6, 2.1–2.3, 3.1–3.4, 4.1–4.4, 5.1–5.3, 5.5, 5.6, 6.1 (5.4 real model waits for HF_TOKEN)
+- **Next task:** 6.3 — Keyword search
+- **Completed tasks:** 0.1–0.6, 1.1–1.6, 2.1–2.3, 3.1–3.4, 4.1–4.4, 5.1–5.3, 5.5, 5.6, 6.1, 6.2 (5.4 real model waits for HF_TOKEN)
 
 ## Log
+
+### Task 6.2 — Vector search  ✅ done
+**Date:** 2026-10-26
+
+**Built**
+- `app/chat/search.py`: `Evidence` (a chunk or a decision, with its item's title, link, author, time, a score and later its `E#` label) and `vector_search(session, tags, question, limit)`: the question is embedded with Qwen3-Embedding's own `query` prompt, then pgvector's HNSW index returns the closest visible chunks with their cosine similarity.
+- `gateway.embed(…, prompt_name=)` passes a model prompt through to sentence-transformers.
+- Setting `SEARCH_CANDIDATES` (20): how many pieces each search returns before reranking.
+- `tests/test_search.py` (real embedder): "why do we use a message broker for payments?" finds the RabbitMQ queue PR first, and a closer private chunk is only found by a user holding its tag.
+
+**Key files**
+- `backend/app/chat/search.py`, `backend/app/models/gateway.py`, `backend/app/config/settings.py`, `backend/tests/test_search.py`
+
+**Decisions**
+- Questions use the embedder's `query` instruction and chunks none, as Qwen3-Embedding is trained.
+- `SET LOCAL hnsw.iterative_scan = relaxed_order` (pgvector 0.8): with a filter, plain HNSW stops after `ef_search` candidates and can return fewer rows than asked; iterative scan keeps going until enough visible rows are found.
+
+**How to run / test**
+- `make test`
+
+**Known issues / TODO**
+- None.
 
 ### Task 6.1 — Permission filter  ✅ done
 **Date:** 2026-10-26
