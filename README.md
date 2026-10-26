@@ -4,7 +4,7 @@ Team-memory chatbot: learns from GitHub, Jira and Slack, answers questions with 
 
 Docs: [`description.md`](description.md) (what it is) · [`flow.md`](flow.md) (how it works, end to end) · [`decision.md`](decision.md) (why it's built this way) · [`phases.md`](phases.md) (task list) · [`progress.md`](progress.md) (what's done) · [`timing.md`](timing.md) (how fast it answers) · [`agent.md`](agent.md) (how agents work on it).
 
-Layout: `backend/` (Python API + pipelines) · `frontend/` (a clickable prototype on demo data, not yet connected to the API).
+Layout: `backend/` (Python API + pipelines) · `frontend/` (the web app: React, Vite and Arc UI components).
 
 ## Local development (no Docker)
 
@@ -33,6 +33,20 @@ make run          # API on http://127.0.0.1:8000  (GET /health -> {"status": "ok
 make worker       # learning pipeline: sync + learn every SYNC_INTERVAL_MINUTES (needs Ollama)
 make lint         # ruff check + format check
 ```
+
+## Web app
+
+Requires Node.js 20 or newer (`brew install node`). In a second terminal, with `make run` going:
+
+```bash
+cd frontend
+npm install       # once, and again when package.json changes
+npm run dev       # http://localhost:5173
+```
+
+Log in with a user from `make add-user`. Everyone gets their chats (streamed answers, numbered citations that preview their source, confidence, follow-ups) and an Approvals page for action cards. Admins also get Sources, People and Activity in the sidebar. ⌘K searches chats and pages.
+
+The app calls the API under `/api`, and Vite passes those calls to `http://127.0.0.1:8000`, so the API needs no CORS setting. `npm run build` writes the production files to `frontend/dist`; `npm run preview` serves them with the same pass-through.
 
 ## Users and login
 
@@ -66,7 +80,7 @@ Syncra only shows a user what their linked accounts can see in the tool itself, 
 
 ## Chat
 
-Logged in, start a chat with `POST /chat/sessions`, then send messages to `POST /chat/sessions/{id}/messages`. The reply's `path` says what happened: small talk gets an instant reply; a question gets an answer citing its `sources` as `[E1]`…, with a `confidence` (high, medium or low) and suggested `follow_ups`; a request like "open a Jira ticket to …" gets an approval card (`action`). `…/messages/stream` sends the same reply as Server-Sent Events, word by word. Approve or reject a card with `POST /actions/{id}/approve` or `…/reject`; nothing is created before that.
+The web app is the easy way to chat. Through the API directly: logged in, start a chat with `POST /chat/sessions`, then send messages to `POST /chat/sessions/{id}/messages`. The reply's `path` says what happened: small talk gets an instant reply; a question gets an answer citing its `sources` as `[E1]`…, with a `confidence` (high, medium or low) and suggested `follow_ups`; a request like "open a Jira ticket to …" gets an approval card (`action`). `…/messages/stream` sends the same reply as Server-Sent Events, word by word. Approve or reject a card with `POST /actions/{id}/approve` or `…/reject`; nothing is created before that.
 
 The chat needs Ollama running, `make train-intent-router` done once, and `HF_TOKEN` in `backend/.env` for the prompt guard (Meta's Llama Prompt Guard 2 is gated: accept its licence on Hugging Face, then `make download-models`).
 
@@ -93,6 +107,8 @@ docker compose run --rm api python scripts/download_hf_models.py
 docker compose run --rm api python scripts/train.py triage
 docker compose run --rm api python scripts/train.py intent_router
 ```
+
+The web app isn't in the compose file yet: build it (`npm run build`), serve `frontend/dist` from the reverse proxy, and send `/api/…` to the API with the `/api` prefix removed.
 
 The API listens on `127.0.0.1:API_PORT` (default 8000) only: put a TLS reverse proxy (Caddy / nginx) in front of it, and don't make it public before rate limits are in place. API docs (`/docs`) are off in production. The compose Postgres is reachable from the host only on `127.0.0.1:POSTGRES_PORT`. For an NVIDIA GPU, build with `--build-arg TORCH_INDEX_URL=https://download.pytorch.org/whl/cu124` and uncomment the GPU reservation on the `ollama` service.
 

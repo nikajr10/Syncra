@@ -15,6 +15,7 @@ Docker (`backend/Dockerfile`, `backend/docker-compose.yml`) is only for producti
 - **Python 3.12**: the backend is written in Python.
 - **PostgreSQL 18 + pgvector**: the database. pgvector lets it store AI embeddings.
 - **Ollama**: runs the local LLMs (Qwen3).
+- **Node.js**: runs the web app you chat in.
 - **DBeaver**: a window into the database, to look at the tables (optional but handy).
 
 ---
@@ -24,7 +25,7 @@ Docker (`backend/Dockerfile`, `backend/docker-compose.yml`) is only for producti
 Install Homebrew first if you don't have it (https://brew.sh), then:
 
 ```bash
-brew install git python@3.12 postgresql@18 pgvector
+brew install git python@3.12 postgresql@18 pgvector node
 brew install --cask ollama dbeaver-community
 ```
 
@@ -241,7 +242,20 @@ In http://127.0.0.1:8000/docs, open `POST /auth/login`, click **Try it out**, se
 password, and copy the `token` from the answer. Click **Authorize** at the top of the page and paste it.
 Now `GET /me` shows who you are. A token works for 12 hours; then log in again.
 
-**Chat.** In `/docs`, `POST /chat/sessions` starts a chat (copy its `id`), then
+**Open the web app.** In another terminal:
+
+```bash
+cd frontend
+npm install     # first time only
+npm run dev     # then open http://localhost:5173
+```
+
+Log in with the user you just made and ask a question. Answers stream in word by word; the small numbers
+are citations (point at one to see its source, click to open it). "Open a Jira ticket to …" shows an
+approval card: nothing happens until you press **Approve and create**. As an admin you also get
+**Sources** (add and sync repos, projects, channels), **People** (link accounts) and **Activity**.
+
+**Chat through the API instead.** In `/docs`, `POST /chat/sessions` starts a chat (copy its `id`), then
 `POST /chat/sessions/{id}/messages` with `{"message": "who built the payment service?"}` answers with cited
 `sources`, a `confidence` and `follow_ups`. "Open a Jira ticket to …" returns an approval card instead;
 approve it with `POST /actions/{id}/approve`. The first question after `make run` can take a few extra
@@ -306,6 +320,7 @@ make train-triage   # only if config/triage.yaml changed
 make train-intent-router   # only if config/intent_router.yaml changed
 make run
 make worker         # in a second terminal, if you have sources connected
+cd ../frontend && npm install && npm run dev   # in a third terminal: the web app
 ```
 
 Postgres (`brew services`) and Ollama keep running in the background.
@@ -327,6 +342,12 @@ Postgres (`brew services`) and Ollama keep running in the background.
 **`relation "..." does not exist`**: run `make migrate`.
 
 **`No such file .venv/bin/...`**: run `make install` first.
+
+**The web app says "The answer stopped before it finished"**: the API failed while answering. Look at the
+`make run` terminal. Usually `HF_TOKEN` isn't set yet (the prompt guard can't load) or Ollama isn't running.
+
+**Signing in to the web app says "The server had a problem"**: usually the API isn't running. Start
+`make run` in `backend/`; the web app expects it on port 8000.
 
 **Ollama errors, or connection refused on port 11434**: start the Ollama app, or run `ollama serve`.
 

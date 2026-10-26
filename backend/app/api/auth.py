@@ -109,6 +109,7 @@ class Account(BaseModel):
 class Me(BaseModel):
     username: str = Field(examples=["alice"])
     display_name: str | None = Field(examples=["Alice Chen"])
+    is_admin: bool = Field(description="May use the admin endpoints")
     accounts: list[Account] = Field(description="The accounts an admin linked to this user")
 
 
@@ -149,6 +150,7 @@ def me(user: CurrentUser, session: DB) -> Me:
     return Me(
         username=user.username,
         display_name=user.display_name,
+        is_admin=user.is_admin,
         accounts=[
             Account(tool=a.source_kind, id=a.external_id, display_name=a.display_name)
             for a in accounts

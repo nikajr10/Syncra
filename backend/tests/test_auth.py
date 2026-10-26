@@ -45,6 +45,7 @@ def test_login_me_and_logout(db_session: Session) -> None:
     assert client.get("/me", headers=headers).json() == {
         "username": "alice",
         "display_name": "Alice Chen",
+        "is_admin": False,
         "accounts": [
             {"tool": "slack", "id": "U01", "display_name": "Alice Chen"},
             {"tool": "github", "id": "alice-gh", "display_name": None},

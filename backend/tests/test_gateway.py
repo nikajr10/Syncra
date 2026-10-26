@@ -159,3 +159,33 @@ def test_warm_up_loads_every_chat_model_and_survives_failures(
     assert loaded == ["embedder", "reranker", "claim_checker", "intent_router", "prompt_guard"]
     assert sorted(b["model"] for b in sent) == ["qwen3:4b", "qwen3:8b"]
     assert all(b["keep_alive"] == "30m" and "prompt" not in b for b in sent)
+
+
+def test_hugging_face_calls_never_overlap(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Two models at once on Apple's GPU abort the process: calls from many threads take turns."""
+    import threading
+    import time
+
+    running, most = 0, 0
+    guard = threading.Lock()
+
+    class Model:
+        def predict(self, pairs: list, **_: object) -> list[float]:
+            nonlocal running, most
+            with guard:
+                running += 1
+                most = max(most, running)
+            time.sleep(0.02)
+            with guard:
+                running -= 1
+            return [0.0] * len(pairs)
+
+    monkeypatch.setattr(gateway, "load_cross_encoder", lambda role: Model())
+    threads = [
+        threading.Thread(target=gateway.rerank, args=("reranker", "q", ["a"])) for _ in range(6)
+    ]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert most == 1

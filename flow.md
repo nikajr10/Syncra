@@ -207,9 +207,13 @@ Each message a user sends goes through these steps, with the task that built eac
 
 ## The web app
 
-`frontend/` holds a clickable prototype (`index.html`, `app.js`, `styles.css`). It runs on built-in demo data and isn't connected to the backend.
+`frontend/` is a React app (Vite, TypeScript, Arc UI components). In development Vite serves it on port 5173 and passes every `/api/…` call to the API on port 8000, so the browser only ever talks to one address.
 
-The real web app (Phase 9) will have the login, the chat screen with streamed answers and citations, the approval cards, and screens to connect sources and link accounts.
+1. **Login.** `POST /auth/login` returns a token; the app keeps it in the browser and sends it with every call. `GET /me` says who is logged in and whether they are an admin. Any 401 sends the user back to the login screen.
+2. **Asking.** The first message of a new chat creates it (`POST /chat/sessions`, titled with the message). The message goes to `…/messages/stream`; the app shows a shimmer until the first `token` event, then the draft word by word. The `done` event replaces the draft with the checked answer, its sources, confidence and follow-ups.
+3. **Citations.** Each `[E#]` in the answer becomes a numbered chip; pointing at it previews the source (type, author, date, excerpt), clicking opens it in GitHub, Jira or Slack. Only `http(s)` links are ever made clickable.
+4. **Approvals.** An `action` reply shows its card under the reply. The app lists `GET /actions`; a card saved earlier finds its reply again by chat and time, so it survives a reload. Approve and Reject call `…/approve` and `…/reject` and the card shows the new ticket or the error in place.
+5. **Admin screens.** Sources (`/admin/sources`, refreshed every 10 seconds), People (`/admin/users` and account links) and Activity (`/admin/status`). Non-admins never see these pages.
 
 ---
 

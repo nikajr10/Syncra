@@ -497,10 +497,10 @@ flowchart LR
 - [x] 8.2 Approve / reject and run
 
 **Phase 9 — Web app**
-- [ ] 9.1 Web app skeleton and login
-- [ ] 9.2 Chat screen
-- [ ] 9.3 Approval cards
-- [ ] 9.4 Sources and settings screens
+- [x] 9.1 Web app skeleton and login
+- [x] 9.2 Chat screen
+- [x] 9.3 Approval cards
+- [x] 9.4 Sources and settings screens
 
 **Phase 10 — Quality and launch**
 - [x] 10.1 Demo data

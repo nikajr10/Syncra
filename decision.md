@@ -494,6 +494,24 @@ Code-level details are in [`progress.md`](progress.md), and how the parts work t
 
 **The first word takes 3.5 to 4 seconds, not under 3.** Model warm-up removed the 8 to 19 second first question; what's left is qwen3:8b reading the evidence. `timing.md` lists the options: qwen3:4b for answers, fewer pieces of evidence, or Ollama's flash attention.
 
+## 27. The web app
+
+**React with Vite, not Next.js.** The API already does all the server work, so the app is a plain single-page app: one `npm run dev`, a static `dist/` for production, no second server to run. Next.js would add server rendering nobody needs here.
+
+**Arc UI components instead of hand-made ones.** Buttons, fields, dialogs, the hover card behind citations, the command palette, timeline and metric cards come from Arc (uiarc.dev), installed as source with the shadcn CLI, so they can be read and changed. Its rules shaped the look: neutral surfaces, one accent (blue), two font weights, motion only to explain a change. 21st.dev was used for ideas only (inline citations, approval cards, source lists): its installs need an API key. Arc's AI chat blocks are paid, so the chat itself is built from the free parts.
+
+**No router or data library.** Five screens fit in `#/…` hash routes and a few `fetch` calls in `src/api.ts`. React Router or TanStack Query can come in if the app grows past that.
+
+**Vite passes `/api` to the API instead of opening CORS.** The browser sees one address, the API keeps its strict headers, and production does the same with the reverse proxy.
+
+**The login token sits in the browser's local storage.** The API hands out bearer tokens, so that was the simple fit. A script injected into the page could read it; React never renders the tools' text as HTML and only `http(s)` links become clickable, which closes the usual way in. An httpOnly cookie would be stronger and needs API changes.
+
+**Two small API additions.** `GET /me` now says `is_admin`, so the app knows whether to show admin pages, and action cards carry their `session_id`, so a card shows up under its reply again after a reload.
+
+**Hugging Face models run one call at a time.** Testing the app found that the API process crashed when the first question arrived while warm-up was still loading models, and the same happens with two questions at once: two models on Apple's GPU together trip a Metal assertion. A single lock in the model gateway fixed both; Ollama calls are not affected.
+
+**Contrast fixed in three of Arc's colours.** Its muted grey and warning orange were under the 4.5:1 contrast small text needs, and so was the dark-mode green. The app darkens them in `src/index.css`; every screen now passes an automated accessibility check in light and dark.
+
 ---
 
 ## Decisions still waiting for you
@@ -502,7 +520,9 @@ Code-level details are in [`progress.md`](progress.md), and how the parts work t
 
 **Where Syncra will be deployed.** The server, the domain, where backups go and how secrets are stored decide the rest of the production setup (`security-audit.md` §9).
 
-**Company sign-in for Phase 9?** Local accounts with passwords exist now (section 20). Company sign-in (Google, Okta or GitHub) would avoid storing passwords at all, and can hand out the same tokens.
+**Serving the web app in production.** It's a static folder; the compose file doesn't serve it yet. Say which reverse proxy you'll use and it can be added.
+
+**Company sign-in for the web app?** Local accounts with passwords exist now (section 20). Company sign-in (Google, Okta or GitHub) would avoid storing passwords at all, and can hand out the same tokens.
 
 **A Hugging Face token for Prompt Guard 2.** The guard's code and tests are in, but the real model can't download until `HF_TOKEN` is set in `backend/.env` (with Meta's licence accepted). Until then, chat messages that reach the guard fail.
 

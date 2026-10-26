@@ -71,6 +71,7 @@ def test_an_action_request_returns_a_filled_card_and_creates_nothing(
     assert reply["path"] == ACTION
     card = reply["action"]
     assert card["status"] == "pending" and card["kind"] == "create_jira_ticket"
+    assert card["session_id"] == int(url.split("/")[3])
     assert card["payload"] == {k: v for k, v in PLAN.items() if k != "kind"}
     assert "PAY" in reply["reply"] and "Nothing happens until you approve" in reply["reply"]
     assert created == []  # nothing run yet

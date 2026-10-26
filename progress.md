@@ -4,11 +4,47 @@ Live record of what has been built. Agents add an entry here after every task (f
 
 ## Current status
 
-- **Current phase:** All phases done for the backend (Phase 9 frontend kept as is by the user's request)
-- **Next task:** None in phases.md. Open: the real Prompt Guard run (5.4) once HF_TOKEN is set; the web app (9.1–9.3) when the user wants the frontend connected; the 3-second first word (10.4, see timing.md)
-- **Completed tasks:** 0.1–0.6, 1.1–1.6, 2.1–2.3, 3.1–3.4, 4.1–4.4, 5.1–5.3, 5.5, 5.6, 6.1–6.5, 7.1–7.5, 8.1–8.2, 9.4 (backend), 10.1–10.3, 10.5, 10.6. Partly: 5.4 (code and tests; the real model waits for HF_TOKEN), 10.4 (first word 3.5–4 s, see timing.md). Not built: 9.1–9.3 (frontend kept as is).
+- **Current phase:** All phases done, the web app included (Phase 9, 2026-10-26)
+- **Next task:** None in phases.md. Open: the real Prompt Guard run (5.4) once HF_TOKEN is set; the 3-second first word (10.4, see timing.md); serving the web app from the production compose
+- **Completed tasks:** 0.1–0.6, 1.1–1.6, 2.1–2.3, 3.1–3.4, 4.1–4.4, 5.1–5.3, 5.5, 5.6, 6.1–6.5, 7.1–7.5, 8.1–8.2, 9.1–9.4, 10.1–10.3, 10.5, 10.6. Partly: 5.4 (code and tests; the real model waits for HF_TOKEN), 10.4 (first word 3.5–4 s, see timing.md).
 
 ## Log
+
+### Task 9.1–9.4 — Web app  ✅ done
+**Date:** 2026-10-26
+
+**Built**
+- A React web app in `frontend/` (replaces the old HTML prototype): login, a sidebar with the user's chats, ⌘K search, light and dark themes, and phone layout with a slide-in menu.
+- Chat screen: the first message creates the chat, answers stream word by word, `[E#]` citations become numbered chips that preview their source and open it, a sources list, a confidence badge, follow-up buttons, copy, and starter questions from the demo company.
+- Approval cards under the reply that planned them (still there after a reload) with Approve and Reject, and an Approvals page with every card.
+- Admin screens: Sources (which tools have tokens, each source's sync time, items, people, errors; pause, sync now, add), People (users and linked accounts, link an account) and Activity (item counts and recent problems).
+- API: `GET /me` returns `is_admin`; action cards carry `session_id`.
+- Fix found while testing: Hugging Face model calls now take one lock in `app/models/gateway.py`. Before, a question asked during warm-up (or two at once) crashed the API process on Apple's GPU.
+
+**Key files**
+- `frontend/src/api.ts`: every API call, types, the Server-Sent Events reader (`takeEvents`)
+- `frontend/src/App.tsx`, `Chat.tsx`, `Admin.tsx`, `Login.tsx`, `ui.tsx` and their `.module.css`
+- `frontend/src/components/arc/`: Arc UI components as installed by the shadcn CLI (`components.json` has the `@uiarc` registry)
+- `frontend/vite.config.ts`: the `/api` pass-through to port 8000
+- `backend/app/models/gateway.py`: `_one_at_a_time` lock; `backend/tests/test_gateway.py::test_hugging_face_calls_never_overlap`
+
+**Decisions**
+- React 19 + Vite + TypeScript; Arc UI (free tier) for components, CSS modules and Arc's tokens, no Tailwind. Add a component with `npx shadcn@latest add @uiarc/<name>` from `frontend/`. Arc's paid AI blocks were not used or copied.
+- Hash routes (`#/chat/12`, `#/approvals`, `#/sources`, `#/people`, `#/activity`) and plain `fetch`; no router or data library.
+- The token is kept in local storage under `syncra-token`; the theme under `syncra-theme`.
+- Small text uses `--text-secondary`; `src/index.css` darkens Arc's `--text-muted`, `--warning` and dark `--success` to pass WCAG AA.
+- More in `decision.md` §27.
+
+**How to run / test**
+- `cd frontend && npm install && npm run dev` with `make run` going; open http://localhost:5173.
+- `npm run build` (type check + build), `npm test` (stream parser), backend `make test`.
+- Checked end to end against the demo database with headless Chrome: login and wrong password, a real streamed answer with citations and hover preview, an action card approved (Jira faked) and still there after reload, ⌘K, dark mode, the three admin screens and a bad source id, a non-admin kept off admin pages, a 390 px phone with no sideways scroll. axe found no WCAG 2.1 AA problems on any screen. Prompt Guard was faked for this run (HF_TOKEN is still empty).
+
+**Known issues / TODO**
+- Without `HF_TOKEN` every question fails at the guard; the app shows "The answer stopped before it finished".
+- The JavaScript bundle is about 200 KB gzipped (Motion, Radix, icons); split the admin pages out if load time matters.
+- Not in the production compose yet; README says how to serve `frontend/dist` behind the reverse proxy.
+- No stop button while an answer streams (the API has no cancel).
 
 ### Task 10.6 — Final docs  ✅ done
 **Date:** 2026-10-26

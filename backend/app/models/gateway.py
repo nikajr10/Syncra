@@ -20,11 +20,12 @@ from __future__ import annotations
 import json
 import logging
 import tempfile
+import threading
 import time
-from collections.abc import Iterator
-from functools import lru_cache
+from collections.abc import Callable, Iterator
+from functools import lru_cache, wraps
 from pathlib import Path
-from typing import Any
+from typing import Any, ParamSpec, TypeVar
 
 import httpx
 import yaml
@@ -183,6 +184,23 @@ def chat_ollama() -> OllamaClient:
 
 # --- Hugging Face ---------------------------------------------------------------------------
 
+# One Hugging Face model call at a time, loads included. The API serves requests on many threads
+# and warms models up on another; two at once on Apple's GPU (MPS) abort the whole process with
+# a Metal assertion, and lru_cache alone would load the same model twice.
+# ponytail: one global lock; per-device locks if the API ever runs models on several GPUs.
+_HF_LOCK = threading.Lock()
+P = ParamSpec("P")
+R = TypeVar("R")
+
+
+def _one_at_a_time(fn: Callable[P, R]) -> Callable[P, R]:
+    @wraps(fn)
+    def locked(*args: P.args, **kwargs: P.kwargs) -> R:
+        with _HF_LOCK:
+            return fn(*args, **kwargs)
+
+    return locked
+
 
 @lru_cache
 def device() -> str:
@@ -225,6 +243,7 @@ def load_cross_encoder(role: str):  # noqa: ANN201 - heavy import kept lazy
     return model
 
 
+@_one_at_a_time
 def embed(
     role: str, texts: list[str], batch_size: int = 32, prompt_name: str | None = None
 ) -> list[list[float]]:
@@ -272,6 +291,7 @@ def load_gliner(role: str):  # noqa: ANN201 - heavy import kept lazy
     return model
 
 
+@_one_at_a_time
 def find_entities(role: str, texts: list[str]) -> list[list[tuple[str, str, float]]]:
     """(name, label, score) hits per text for the role's labels; hits under threshold dropped."""
     if not texts:
@@ -300,6 +320,7 @@ def load_classifier(role: str):  # noqa: ANN201 - heavy import kept lazy
     return tokenizer, model
 
 
+@_one_at_a_time
 def label_scores(
     role: str, texts: list[str], label: str, window: int = 512, overlap: int = 64
 ) -> list[float]:
@@ -331,6 +352,7 @@ def label_scores(
     return scores
 
 
+@_one_at_a_time
 def rerank(role: str, query: str, candidates: list[str]) -> list[float]:
     """One relevance score per candidate from the cross-encoder configured for `role`."""
     started = time.perf_counter()
@@ -340,6 +362,7 @@ def rerank(role: str, query: str, candidates: list[str]) -> list[float]:
     return [float(s) for s in scores]
 
 
+@_one_at_a_time
 def nli(role: str, pairs: list[tuple[str, str]]) -> list[dict[str, float]]:
     """{label: probability} per (premise, hypothesis) from the NLI cross-encoder for `role`,
     e.g. {"entailment": 0.97, "neutral": 0.02, "contradiction": 0.01}."""
@@ -406,6 +429,7 @@ def load_setfit(role: str):  # noqa: ANN201 - heavy import kept lazy
     return model
 
 
+@_one_at_a_time
 def classify(role: str, texts: list[str]) -> list[str]:
     """One label per text from the SetFit classifier trained for `role`."""
     if not texts:
@@ -451,7 +475,8 @@ def warm_up() -> None:
     }  # fmt: skip
     for role, load in loaders.items():
         try:
-            load(role)
+            with _HF_LOCK:
+                load(role)
         except Exception as exc:  # e.g. Prompt Guard without HF_TOKEN
             log.warning("warm-up: %s not loaded: %s", role, exc)
     client = chat_ollama()

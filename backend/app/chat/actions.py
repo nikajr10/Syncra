@@ -51,6 +51,7 @@ def card(action: Action) -> dict[str, Any]:
     """What the user sees: the action, its status and, once run, its result."""
     return {
         "id": action.id,
+        "session_id": action.session_id,
         "kind": action.kind,
         "payload": action.payload,
         "status": action.status,
