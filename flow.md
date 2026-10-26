@@ -243,5 +243,5 @@ All paths are under `backend/`.
 - Chat memory: `app/chat/memory.py`; the intent router: `app/chat/intent.py`, trained by `scripts/train.py`; the question rewriter: `app/chat/rewrite.py`, with its prompt in `config/prompts/question_rewriter.v1.yaml`
 - One chat message, start to finish: `app/chat/pipeline.py`; the prompt guard: `app/chat/guard.py`
 - Who may see what: `app/chat/permissions.py`; the three searches and the reranker: `app/chat/search.py`
-- Answers: `app/chat/answer.py` (prompt in `config/prompts/answer_writer.v1.yaml`); claim checks and confidence: `app/chat/check.py`
+- Answers: `app/chat/answer.py` (prompt in `config/prompts/answer_writer.v2.yaml`); claim checks and confidence: `app/chat/check.py`
 - Actions: `app/chat/actions.py` (prompt in `config/prompts/action_planner.v1.yaml`), endpoints in `app/api/actions.py`

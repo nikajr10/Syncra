@@ -1,7 +1,7 @@
 """Answer writer (Task 7.2): evidence + chat history + question -> a cited answer, streamed.
 
 qwen3:8b answers only from the evidence (`search.find_evidence`), citing it as [E1]…[E8], and
-ends with a "Follow-ups:" line and 2–3 suggested questions (config/prompts/answer_writer.v1.yaml).
+ends with a "Follow-ups:" line and 2–3 suggested questions (config/prompts/answer_writer.v2.yaml).
 The text is streamed piece by piece as Ollama writes it; `split` separates the answer from the
 follow-ups once it is complete. Without evidence there is nothing to answer from: the reply is
 "I don't know" at once, without a model call.

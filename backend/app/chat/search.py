@@ -33,10 +33,10 @@ from app.db.schema import Chunk, Decision, Edge, EntityAlias, Item, UserSourceId
 from app.learning.link import key, keys_in
 from app.models import gateway
 
-# ids, function names, error codes: a word with a digit, an underscore or an inner capital
 log = logging.getLogger("syncra.chat")
 
 ACCOUNT = re.compile(r"\b(?:github|jira|slack):[A-Za-z0-9](?:[A-Za-z0-9:._-]*[A-Za-z0-9])?")
+# ids, function names, error codes: a word with a digit, an underscore or an inner capital
 IDENTIFIER = re.compile(r"\b\w[\w-]*?(?:\d|_|[a-z][A-Z])[\w-]*")
 
 

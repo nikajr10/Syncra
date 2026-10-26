@@ -6,6 +6,12 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   plugins: [react()],
   resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
+  // React and Motion in their own file: it stays cached in the browser when only the app changes.
+  build: {
+    rolldownOptions: {
+      output: { codeSplitting: { groups: [{ name: 'vendor', test: /node_modules\/(react|react-dom|scheduler|motion|motion-dom|motion-utils|framer-motion)\// }] } },
+    },
+  },
   server: {
     proxy: {
       '/api': { target: 'http://127.0.0.1:8000', rewrite: (path) => path.replace(/^\/api/, '') },
