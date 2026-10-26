@@ -31,6 +31,11 @@ Live record of what has been built. Agents add an entry here after every task (f
 **Known issues / TODO**
 - Speed (10.4) is unchanged: what's left there needs a model or setting the user picks (timing.md). The guard check in 5.4 is now a manual chat test once HF_TOKEN is set.
 
+**Follow-up, same day**
+- Backend: the test-only injection parameters are gone (`classify`, `detect`, `find`, `client`, `build`, `session_factory`); functions call the gateway and `new_session` directly. The unused `answer_writer.v1` prompt is deleted.
+- Web app, the user's rule: keep what shows or changes data, and static parts only when needed. Removed the ⌘K palette (the sidebar lists the same chats and pages), the unused toast stack, the theme menu (dark mode follows the system, set in `main.tsx`), animated counters, avatars, text shimmer, the login rings and logo row, and rise-in animations. The account row is now a name and a Sign out button.
+- React and Motion build into their own `vendor` file, cached across deploys. App code is 138 kB (was 190 kB), CSS 50 kB (was 77 kB).
+
 ### Task 9.2 follow-up — A dynamic web app  ✅ done
 **Date:** 2026-10-26
 
