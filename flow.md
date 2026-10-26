@@ -184,22 +184,22 @@ The API documentation is on locally (`API_DOCS=true` in `.env`) and always off i
 
 ---
 
-## The chat side (planned, Phases 5–8)
+## The chat side (Phases 5–8)
 
-None of this is built yet. It's how the design in `description.md` will use what the worker stores, with the task that builds each step in brackets.
+Each message a user sends goes through these steps, with the task that built each one in brackets. `POST /chat/sessions/{id}/messages` answers in one piece; `…/messages/stream` sends the same reply as Server-Sent Events, word by word.
 
-1. **Who's asking** (built). The user logs in with a token, and the GitHub, Jira and Slack accounts an admin linked to them decide what they may see (5.1).
-2. **Memory** (built). The last 10 turns of the chat are loaded from `chat_messages`, oldest first. A turn is one user message and the replies after it (5.2).
-3. **Rewrite** (built). If there is history, qwen3:4b turns a follow-up like "who reviewed it?" into a standalone question like "Who reviewed the payment service?" (5.3). It sees the newest 4000 characters of the chat as quoted data and answers in JSON, at temperature 0 so the same follow-up always gets the same rewrite. A first message skips the model, and if the model fails the message is used as it is.
-4. **Safety.** Prompt Guard 2 blocks prompt-injection and jailbreak attempts with a polite reply (5.4).
-5. **Intent** (built). A second SetFit classifier, trained on `config/intent_router.yaml`, picks the path in a few milliseconds. Small talk gets an instant canned reply with no search and no LLM, a request to *do* something goes to an approval card, and a question carries on (5.5).
-6. **Search.** Three searches run at the same time, and each only looks at items whose access tags the user has; that filter sits inside the query itself (6.1). Vector search embeds the question with the same Qwen3-Embedding model and finds the closest chunks (6.2). Keyword search matches exact terms like `PAY-1234` (6.3). Graph search finds the entities named in the question through their aliases and follows links to related decisions and chunks (6.4).
-7. **Rerank.** A cross-encoder scores every match against the question, and the best 8 become the evidence `E1`…`E8` (6.5).
-8. **Answer.** qwen3:8b writes the answer only from that evidence, cites it as `[E1]`, and streams it word by word. If the evidence isn't enough, it says it doesn't know (7.1–7.2).
-9. **Check.** A DeBERTa model checks each claim against the evidence it cites and removes the unsupported ones. The answer is then labelled high, medium or low confidence (7.3–7.4).
-10. **Reply.** The user sees the answer, clickable sources, the confidence and suggested follow-up questions, and the turn is saved to the chat history (7.5).
+1. **Who's asking.** The user logs in with a token, and the GitHub, Jira and Slack accounts an admin linked to them decide what they may see (5.1).
+2. **Memory.** The last 10 turns of the chat are loaded from `chat_messages`, oldest first. A turn is one user message and the replies after it (5.2).
+3. **Safety.** Prompt Guard 2 scores the message as written; an attack gets a polite refusal, reaches no model and isn't saved (5.4). Until `HF_TOKEN` is set, the real model can't load.
+4. **Intent.** A SetFit classifier picks the path in a few milliseconds. Small talk gets an instant canned reply with no search and no LLM (5.5).
+5. **Rewrite.** For questions and actions, qwen3:4b turns a follow-up like "who reviewed it?" into "Who reviewed the payment service?" using the history (5.3). The rewrite is guarded too; if it looks like an attack, the original message is used.
+6. **Search.** Three searches run at the same time, each in its own database session, and each only reads items the user may see: the access-tag filter is a condition inside every query (6.1). Vector search embeds the question with Qwen3-Embedding's search instruction (6.2). Keyword search requires ids like `PAY-1234` and matches other words loosely (6.3). Graph search finds the names in the question among the entity aliases and follows links two steps out, for example from a service to the PR that mentions it to that PR's review (6.4).
+7. **Rerank.** A cross-encoder scores every match, with a short header saying what it is ("Add the payment queue (review by github:bob)"). Matches scoring very low are dropped, and the best 8 become `E1`…`E8` (6.5).
+8. **Answer.** qwen3:8b writes the answer only from that evidence, cites it as `[E1]`, and adds two or three follow-up questions; the text streams to the user as it is written (7.1–7.2). With no evidence, the reply is "I don't know" at once, without the LLM.
+9. **Check.** A DeBERTa model checks each sentence against the evidence it cites and removes the unsupported ones; a true sentence without a citation gets one (7.3). The answer is then labelled high, medium or low confidence from how much of it held up and how relevant its evidence was (7.4).
+10. **Reply.** The final reply carries the checked answer, the sources it cites (title, link, author, date, excerpt), the confidence and the follow-ups, and is saved to the chat history (7.5). If Ollama is down, the user gets an apology and the question stays unanswered in the history.
 
-**Actions (Phase 8).** A request like "open a Jira ticket to add monitoring for payments" becomes a filled-in **approval card**, saved as `pending` in `actions`. Nothing happens until the user approves. Then it runs with the user's own permissions, and every step is logged.
+**Actions (Phase 8).** A request like "open a Jira ticket to add monitoring for payments" goes to qwen3:8b, which fills in a ticket (project, title, description) for one of the Jira projects the user may see. It is saved as `pending` in `actions` and returned as an **approval card**; nothing is created (8.1). `POST /actions/{id}/approve` checks the user's access again, creates the ticket through the Jira API and records its key and link, or the error; `…/reject` only marks it rejected. Every step is logged (8.2).
 
 ---
 
@@ -233,3 +233,7 @@ All paths are under `backend/`.
 - Tables: `app/db/schema.py`, created by the files in `migrations/versions/`
 - The API: `app/api/main.py`; users, logins and linked accounts: `app/api/auth.py` (the admin commands are `scripts/users.py`); chats: `app/api/chat.py`
 - Chat memory: `app/chat/memory.py`; the intent router: `app/chat/intent.py`, trained by `scripts/train.py`; the question rewriter: `app/chat/rewrite.py`, with its prompt in `config/prompts/question_rewriter.v1.yaml`
+- One chat message, start to finish: `app/chat/pipeline.py`; the prompt guard: `app/chat/guard.py`
+- Who may see what: `app/chat/permissions.py`; the three searches and the reranker: `app/chat/search.py`
+- Answers: `app/chat/answer.py` (prompt in `config/prompts/answer_writer.v1.yaml`); claim checks and confidence: `app/chat/check.py`
+- Actions: `app/chat/actions.py` (prompt in `config/prompts/action_planner.v1.yaml`), endpoints in `app/api/actions.py`

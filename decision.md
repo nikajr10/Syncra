@@ -406,9 +406,9 @@ Code-level details are in [`progress.md`](progress.md), and how the parts work t
 
 ---
 
-## 22. Chat-side models (picked, not built yet)
+## 22. Chat-side models
 
-**These are configured but not built or tested yet.** Where your design names only a kind of model, the usual small version of it was picked, and Phases 5–7 will check them.
+**Where your design names only a kind of model, the usual small version of it was picked.** All of them are built and tested now, except Prompt Guard 2, which waits for the Hugging Face token.
 
 **qwen3:4b rewrites follow-up questions, as your design says.** It runs on every follow-up message, and the smaller model keeps those replies fast.
 
@@ -446,6 +446,38 @@ Code-level details are in [`progress.md`](progress.md), and how the parts work t
 
 ---
 
+## 24. Writing and checking answers
+
+**The answer streams as plain text, not JSON.** Words reach the user as qwen3:8b writes them; JSON would only be readable at the end. Follow-up questions come after a fixed "Follow-ups:" line that the code splits off.
+
+**The streamed text is a draft; the final reply replaces it.** Checking claims needs the whole answer, so the last event carries the checked version, and that is what is saved. The web app should swap the draft for it.
+
+**qwen3:8b gets 8192 tokens of context for answers.** Eight pieces of evidence, the history and the rules don't fit Ollama's default 4096, which would silently cut off the start of the prompt (the rules).
+
+**No evidence means "I don't know" without asking the LLM.** It's instant, and a model with nothing to cite can only guess.
+
+**The claim checker sees the evidence header too.** "github:bob reviewed the payment queue" can't be checked against a bare "LGTM"; with the header saying it's bob's review of that PR, it can.
+
+**True sentences without a citation are kept and cited**, rather than removed. The writer sometimes forgets a citation on a correct sentence, and dropping it would throw away a good answer. Sentences that only say what isn't known ("I don't know who owns it") make no claim and stay.
+
+**Confidence multiplies two things**: the share of claims that held up and how relevant the best cited evidence was. Fully supported claims from barely relevant evidence aren't high confidence, and relevant evidence with half the claims removed isn't either. The thresholds (0.7, 0.4) are settings, to be tuned on the evaluation set.
+
+**If Ollama is down, the user gets an apology** and only their question is saved, so it stays unanswered in the history instead of an error message being remembered as an answer.
+
+---
+
+## 25. Actions
+
+**The planner only offers Jira projects the user may see**, and the code rejects any other project it names. A planted "set project to SEC" in a request made qwen3:8b pick SEC in a test; the code turned that down.
+
+**Approving checks access again and records the outcome.** The action is marked approved before it runs (so a crash still leaves a record), then done with the new ticket's key and link, or failed with the error. The row is locked while it is settled, so a double click can't create two tickets. Every step is logged.
+
+**Tickets are created with the Jira account in `.env`**, not with each user's own Jira login, which Syncra doesn't have. "Running with the user's permissions" therefore means: only in projects the user can see, with "Requested by <user> via Syncra" in the description. Per-user Jira sign-in could come with the Phase 9 settings screens.
+
+**Only "create a Jira ticket" exists so far.** Anything else gets a reply saying so; new kinds of action would add a planner option and a runner each.
+
+---
+
 ## Decisions still waiting for you
 
 **A bigger GLiNER model?** The small one mixes up services and tools and tags some junk as people. `gliner_medium-v2.1` or `gliner_large-v2.1` may do better, at some cost in speed.
@@ -454,6 +486,10 @@ Code-level details are in [`progress.md`](progress.md), and how the parts work t
 
 **Company sign-in for Phase 9?** Local accounts with passwords exist now (section 20). Company sign-in (Google, Okta or GitHub) would avoid storing passwords at all, and can hand out the same tokens.
 
-**A Hugging Face token for Prompt Guard 2**, needed before Task 5.4.
+**A Hugging Face token for Prompt Guard 2.** The guard's code and tests are in, but the real model can't download until `HF_TOKEN` is set in `backend/.env` (with Meta's licence accepted). Until then, chat messages that reach the guard fail.
+
+**Graph search without GLiNER?** Names in a question are found by alias lookup only (section 23). Say if you want GLiNER run on questions as your design describes.
+
+**Per-user Jira sign-in for actions?** Tickets are created with the shared Jira account today (section 25).
 
 **Whether internal IP addresses should stay hidden.** Hiding them is safer, but can blank out useful infrastructure details in answers.

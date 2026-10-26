@@ -157,6 +157,24 @@ class JiraConnector:
             params["startAt"] += len(page)
         return accounts
 
+    def create_issue(self, title: str, description: str) -> dict[str, str]:
+        """Create a Task in the project (Phase 8 actions): {"key", "link"} of the new ticket."""
+        paragraphs = [
+            {"type": "paragraph", "content": [{"type": "text", "text": part}]}
+            for part in description.split("\n\n")
+            if part.strip()
+        ]
+        fields = {
+            "project": {"key": self.project_key},
+            "summary": title,
+            "issuetype": {"name": "Task"},
+            "description": {"type": "doc", "version": 1, "content": paragraphs},
+        }
+        response = self._client.post("/rest/api/3/issue", json={"fields": fields})
+        response.raise_for_status()
+        key = response.json()["key"]
+        return {"key": key, "link": f"{self.base_url}/browse/{key}"}
+
     # --- mapping -------------------------------------------------------------------------
 
     @staticmethod

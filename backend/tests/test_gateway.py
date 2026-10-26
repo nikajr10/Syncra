@@ -51,7 +51,7 @@ def test_role_options_from_config_are_sent_and_calls_can_override_them() -> None
     client = _client(handler)
     client.generate("question_rewriter", "q")  # options: {temperature: 0} in models.yaml
     client.generate("question_rewriter", "q", options={"temperature": 0.7, "num_predict": 9})
-    client.generate("answer_writer", "q")  # no options configured
+    client.generate("decision_reader", "q")  # no options configured
     assert sent == [{"temperature": 0}, {"temperature": 0.7, "num_predict": 9}, None]
 
 

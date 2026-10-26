@@ -3,7 +3,7 @@
 memory → guard → intent → small talk: an instant canned reply
                         → question: rewrite → guard → find evidence → answer (streamed)
                                     → check claims → confidence
-                        → action: rewrite → guard → placeholder (approval cards: Phase 8)
+                        → action: rewrite → guard → plan a pending action (approval card)
 
 The guard and the intent router read the message as the user wrote it, before the rewriter:
 small talk never waits for an LLM, and an attack never reaches one. The rewritten question is
@@ -24,7 +24,7 @@ from typing import Any, Literal
 
 from sqlalchemy.orm import Session
 
-from app.chat import answer, guard, intent, search
+from app.chat import actions, answer, guard, intent, search
 from app.chat.check import CITATION, check, confidence
 from app.chat.intent import ACTION, QUESTION, SMALL_TALK
 from app.chat.memory import add_message, last_turns
@@ -36,7 +36,13 @@ from app.models.gateway import OllamaClient, OllamaError
 log = logging.getLogger("syncra.chat")
 
 BLOCKED = "blocked"
-ACTION_PLACEHOLDER = "Actions aren't built yet. Your request, as I understood it: {question}"
+PLANNED = (
+    'I can create this Jira ticket in {project}: "{title}". Nothing happens until you approve it.'
+)
+CANT_DO = (
+    "I can only create Jira tickets so far, in Jira projects you can see. Try: "
+    '"open a Jira ticket to add monitoring for the payment queue".'
+)
 UNSUPPORTED = "I don't know: the evidence I found doesn't back up an answer."
 UNAVAILABLE = "Sorry, I can't write an answer right now: the language model isn't reachable."
 EXCERPT_CHARS = 300
@@ -52,6 +58,7 @@ class Reply:
     sources: list[dict[str, Any]] = field(default_factory=list)  # the evidence the reply cites
     confidence: str | None = None  # high | medium | low, on answers
     follow_ups: list[str] = field(default_factory=list)  # suggested next questions
+    action: dict[str, Any] | None = None  # the approval card, on the action path
 
 
 def source(e: search.Evidence) -> dict[str, Any]:
@@ -91,7 +98,7 @@ def stream(
             log.warning("prompt guard flagged the rewritten question in chat %s", chat.id)
             question = message
         if path == ACTION:
-            done = Reply(ACTION, ACTION_PLACEHOLDER.format(question=question), question)
+            done = _plan(session, chat, question, client)
         else:
             done = yield from _answer(session, chat, question, history, client, find)
     add_message(session, chat, "user", message)
@@ -126,6 +133,18 @@ def _answer(
     cited = {label.strip() for m in CITATION.findall(text) for label in m.split(",")}
     sources = [source(e) for e in evidence if e.label in cited]
     return Reply(QUESTION, text, question, sources, confidence(checked, evidence), follow_ups)
+
+
+def _plan(session: Session, chat: ChatSession, request: str, client: OllamaClient | None) -> Reply:
+    try:
+        action = actions.plan(session, chat, request, client)
+    except OllamaError:
+        log.exception("action planner failed in chat %s", chat.id)
+        return Reply(ACTION, UNAVAILABLE, request)
+    if action is None:
+        return Reply(ACTION, CANT_DO, request)
+    text = PLANNED.format(project=action.payload["project"], title=action.payload["title"])
+    return Reply(ACTION, text, request, action=actions.card(action))
 
 
 def reply(session: Session, chat: ChatSession, message: str, **models: Any) -> Reply:

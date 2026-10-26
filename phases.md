@@ -493,8 +493,8 @@ flowchart LR
 - [x] 7.5 Full chat reply
 
 **Phase 8 — Actions**
-- [ ] 8.1 Action planner
-- [ ] 8.2 Approve / reject and run
+- [x] 8.1 Action planner
+- [x] 8.2 Approve / reject and run
 
 **Phase 9 — Web app**
 - [ ] 9.1 Web app skeleton and login

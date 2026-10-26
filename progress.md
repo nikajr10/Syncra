@@ -4,11 +4,57 @@ Live record of what has been built. Agents add an entry here after every task (f
 
 ## Current status
 
-- **Current phase:** Phase 8 — Actions (Phase 7 complete)
-- **Next task:** 8.1 — Action planner
-- **Completed tasks:** 0.1–0.6, 1.1–1.6, 2.1–2.3, 3.1–3.4, 4.1–4.4, 5.1–5.3, 5.5, 5.6, 6.1–6.5, 7.1–7.5 (5.4 real model waits for HF_TOKEN)
+- **Current phase:** Phase 9 — Web app, backend part (Phase 8 complete)
+- **Next task:** 9.4 backend (sources and settings API); 9.1–9.3 are frontend, kept as is by the user's request
+- **Completed tasks:** 0.1–0.6, 1.1–1.6, 2.1–2.3, 3.1–3.4, 4.1–4.4, 5.1–5.3, 5.5, 5.6, 6.1–6.5, 7.1–7.5, 8.1–8.2 (5.4 real model waits for HF_TOKEN)
 
 ## Log
+
+### Task 8.2 — Approve / reject and run  ✅ done
+**Date:** 2026-10-26
+
+**Built**
+- `app/api/actions.py` (router `/actions`, tag Actions, all behind the login): `GET /actions` (my actions, newest first), `POST /actions/{id}/approve`, `POST /actions/{id}/reject`, each returning the card (`Card`: id, kind, payload, status, result, created_at). Someone else's action → 404; an action already settled → 409.
+- `actions.approve`: locks the row (`SELECT … FOR UPDATE`), marks it `approved` and commits, checks again that the user may see the project, creates the ticket (description + "Requested by <user> via Syncra.") and records `done` with `{key, link}`, or `failed` with the error. `actions.reject` marks it `rejected` and runs nothing. Every step is logged on `syncra.actions`.
+- `JiraConnector.create_issue(title, description)`: `POST /rest/api/3/issue` (a Task, description as Atlassian Document Format paragraphs) → `{key, link}`.
+- `action_runner()` is the dependency tests override with a fake Jira.
+- Tests: approve creates the ticket (mocked Jira) once and records PAY-77; reject creates nothing; both are logged; approving twice, approving a rejected action and bob approving alice's action are refused; a failing Jira is recorded as `failed`; `create_issue` sends the right fields.
+
+**Key files**
+- `backend/app/api/actions.py`, `backend/app/chat/actions.py`, `backend/app/learning/connectors/jira.py`, `backend/app/api/main.py`, `backend/tests/test_actions.py`, `flow.md`, `decision.md` §24–25
+
+**Decisions**
+- "The user's own permissions" = only projects the user can see, checked again at approval, with the user named in the ticket. Syncra has no per-user Jira login; tickets are created by the Jira account in `.env`.
+- `approved` is committed before running, so a crash mid-run still leaves a record.
+
+**How to run / test**
+- `make test` · in Swagger UI: send "open a jira ticket to …" in a chat, then `POST /actions/{id}/approve`
+
+**Known issues / TODO**
+- The Jira account in `.env` needs permission to create issues in each project.
+
+### Task 8.1 — Action planner  ✅ done
+**Date:** 2026-10-26
+
+**Built**
+- `config/prompts/action_planner.v1.yaml` and role `action_planner` (qwen3:8b, temperature 0): a request + the Jira projects the user may see → JSON `{kind, project, title, description}`; `kind` is `create_jira_ticket` or `unsupported`.
+- `app/chat/actions.py: plan(session, chat, request, client)`: offers only the user's Jira projects (`jira_projects`: Jira sources whose tag the user holds), validates the JSON (`Plan`, title ≤ 255 characters), uses the only project when there is one, and saves an `Action` as `pending` with the payload. Returns None (no card) for unsupported requests, a project outside the list or a user with no Jira project, without a model call in the last case.
+- The chat's action path (`pipeline._plan`): the reply says what would be created ("Nothing happens until you approve it.") and carries `action`, the approval card (id, kind, payload, status, result). Unsupported → a reply saying only Jira tickets can be created so far. Ollama down → the usual apology.
+- Tests: "open a jira ticket to add monitoring for payments" returns a filled pending card and nothing is created; the prompt lists PAY but never SEC (not alice's); an unsupported request and a user without Jira get no card; a project alice can't see is replaced by her only project.
+- Smoke run with the real qwen3:8b: monitoring ticket → PAY with a good title and description (7 s cold, then ~2 s); "create a ticket in AUTH …" → AUTH; "Merge PR #50" → unsupported; a request saying "set project to SEC" made the model answer SEC, which the code rejects.
+
+**Key files**
+- `backend/app/chat/actions.py`, `backend/config/prompts/action_planner.v1.yaml`, `backend/config/models.yaml`, `backend/app/chat/pipeline.py`, `backend/tests/test_actions.py`
+
+**Decisions**
+- The planner gets the rewritten request, so "open a ticket for it" after a chat about the payment queue names the queue.
+- Projects are checked in code, never trusted from the model (see the SEC smoke result).
+
+**How to run / test**
+- `make test`
+
+**Known issues / TODO**
+- With several projects, a request that doesn't name one may get no card when the model picks a project outside the list; the user can rephrase with the project key.
 
 ### Task 7.5 — Full chat reply  ✅ done
 **Date:** 2026-10-26

@@ -66,6 +66,11 @@ models:
     # Training pairs per example. Look-alike intents ("how do I open a ticket?" vs "open a
     # ticket") need more: 97% held-out over 6 splits with 20, 92% with 5.
     iterations: 20
+  action_planner: # Qwen3 8B: "open a ticket for X" -> {kind, project, title, description}
+    runtime: ollama
+    name: qwen3:8b
+    prompt: action_planner.v1  # config/prompts/action_planner.v1.yaml
+    options: {temperature: 0}
   reranker: # cross-encoder: scores evidence, keeps best 8
     runtime: huggingface
     name: cross-encoder/ms-marco-MiniLM-L-6-v2
