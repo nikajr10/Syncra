@@ -56,7 +56,9 @@ models:
   prompt_guard: # Meta Prompt Guard 2 (gated: needs HF_TOKEN + accepted licence)
     runtime: huggingface
     name: meta-llama/Llama-Prompt-Guard-2-86M
+    revision: a8ded8e697ce7c355e395a0df51f94adb4a2fd27  # pinned commit; bump deliberately
     gated: true
+    threshold: 0.5  # messages scoring at least this (MALICIOUS probability) are blocked
   intent_router_base: # SetFit body for small_talk / question / action (trained head saved by Task 5.5)
     runtime: huggingface
     name: sentence-transformers/all-MiniLM-L6-v2

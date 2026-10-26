@@ -4,11 +4,54 @@ Live record of what has been built. Agents add an entry here after every task (f
 
 ## Current status
 
-- **Current phase:** Phase 5 — Chat basics (Phase 4 complete: the learning pipeline runs end to end)
-- **Next task:** 5.4 — Prompt guard (needs `HF_TOKEN` in `backend/.env`), then 5.6
-- **Completed tasks:** 0.1–0.6 (Phase 0 complete), 1.1–1.6 (Phase 1 complete), 2.1–2.3 (Phase 2 complete), 3.1–3.4 (Phase 3 complete), 4.1–4.4 (Phase 4 complete), 5.1–5.3, 5.5
+- **Current phase:** Phase 6 — Find evidence (Phase 5 done except the real Prompt Guard run)
+- **Next task:** 6.1 — Permission filter
+- **Completed tasks:** 0.1–0.6, 1.1–1.6, 2.1–2.3, 3.1–3.4, 4.1–4.4, 5.1–5.3, 5.5, 5.6 (5.4 code done, real model waits for HF_TOKEN)
 
 ## Log
+
+### Task 5.6 — Chat endpoint (skeleton)  ✅ done
+**Date:** 2026-10-26
+
+**Built**
+- `app/chat/pipeline.py: reply(session, chat, message, …)`: memory → guard → intent → small talk (canned reply) | question / action (rewrite → guard the rewrite → placeholder). The turn is saved in one transaction; a blocked message is not saved.
+- `POST /chat/sessions/{id}/messages` `{message}` → `{path, reply, question}`; `chat_models()` is the dependency tests override with fake models.
+- `tests/test_chat.py`: three messages take the small-talk, question and action paths (and memory feeds the rewriter); an attack is blocked, unsaved and absent from later history; a rewrite the guard flags falls back to the raw message; empty, blank, too long and someone else's chat are rejected.
+
+**Key files**
+- `backend/app/chat/pipeline.py`, `backend/app/api/chat.py`, `backend/tests/test_chat.py`
+
+**Decisions**
+- Guard and intent run on the raw message (small talk never waits for an LLM, an attack never reaches one); only questions and actions are rewritten.
+- `CHAT_MESSAGE_MAX_CHARS` (4000) caps a message.
+
+**How to run / test**
+- `make test`
+
+**Known issues / TODO**
+- Real-model smoke run waits for `HF_TOKEN` (Task 5.4). Question and action placeholders are replaced in Tasks 7.5 and 8.1.
+
+### Task 5.4 — Prompt guard  ⚠️ partly done
+**Date:** 2026-10-26
+
+**Built**
+- `app/chat/guard.py`: `is_attack(text, detect=…)` scores a message with Llama Prompt Guard 2 (`gateway.label_scores("prompt_guard", …, "MALICIOUS")`) and blocks it at the role's `threshold`; `BLOCKED_REPLY` is the polite answer.
+- `gateway.load_classifier` / `label_scores`: any Hugging Face text classifier, read in 512-token windows that overlap by 64; a text's worst window counts, so padding can't push an attack out of view.
+- `config/models.yaml`: Prompt Guard pinned to commit `a8ded8e…` (read from the Hub's public API) with `threshold: 0.5`.
+- `tests/test_guard.py`: the threshold decides; an attack padded to ~1600 tokens is still caught (real tokenizer, fake model); a real-model test (3 attacks blocked, 3 questions incl. "ignore the last answer, who reviewed PR #42?" pass) that runs once `HF_TOKEN` is set.
+
+**Key files**
+- `backend/app/chat/guard.py`, `backend/app/models/gateway.py`, `backend/config/models.yaml`, `backend/tests/test_guard.py`
+
+**Decisions**
+- The guard reads the message as written, before the rewriter, and the rewrite again (Task 5.6).
+
+**How to run / test**
+- `make test` (the real-model test is skipped without `HF_TOKEN`)
+
+**Known issues / TODO**
+- `HF_TOKEN` in `backend/.env` is still empty, so the real model has not run. Once it is set: `make download-models`, check `label2id` has `MALICIOUS`, run `tests/test_guard.py`, and tune `threshold` if a benign question is blocked. Then tick 5.4 in phases.md.
+- Without the token the chat endpoint fails on the first message that reaches the guard (the model can't load); tests use a fake.
 
 ### API documentation (not a phase task)  ✅ done
 **Date:** 2026-10-16
