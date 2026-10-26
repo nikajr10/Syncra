@@ -94,7 +94,7 @@ class ModelSpec(BaseModel):
     gated: bool = False  # needs HF_TOKEN + accepted licence
     files: list[str] | None = None  # Hugging Face: download only these (glob patterns)
     labels: list[str] = []  # GLiNER: entity types to look for
-    threshold: float = 0.5  # GLiNER: drop hits scoring lower; entity_linker: merge names this alike
+    threshold: float = 0.5  # GLiNER, reranker, prompt guard: cut-off; entity_linker: merge if alike
     prompt: str | None = None  # Ollama: config/prompts/<prompt>.yaml, versioned by name (".v1")
     options: dict[str, Any] = {}  # Ollama: sent with every call for the role, e.g. temperature
     iterations: int = 5  # SetFit body (<role>_base): training pairs per example

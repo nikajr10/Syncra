@@ -4,11 +4,33 @@ Live record of what has been built. Agents add an entry here after every task (f
 
 ## Current status
 
-- **Current phase:** Phase 6 — Find evidence
-- **Next task:** 6.5 — Merge and rerank
-- **Completed tasks:** 0.1–0.6, 1.1–1.6, 2.1–2.3, 3.1–3.4, 4.1–4.4, 5.1–5.3, 5.5, 5.6, 6.1–6.4 (5.4 real model waits for HF_TOKEN)
+- **Current phase:** Phase 7 — Write and check answers (Phase 6 complete)
+- **Next task:** 7.1 — Answer writer prompt
+- **Completed tasks:** 0.1–0.6, 1.1–1.6, 2.1–2.3, 3.1–3.4, 4.1–4.4, 5.1–5.3, 5.5, 5.6, 6.1–6.5 (5.4 real model waits for HF_TOKEN)
 
 ## Log
+
+### Task 6.5 — Merge and rerank  ✅ done
+**Date:** 2026-10-26
+
+**Built**
+- `search.find_evidence(question, tags, searches=…, session_factory=…)`: vector, keyword and graph search run in parallel threads, each with its own database session; a failing search is logged and skipped. Results are merged without duplicates (same chunk or decision, or the same text), scored by the cross-encoder (`gateway.rerank("reranker", …)`), evidence under the reranker's `threshold` (-5.0 in models.yaml) is dropped, and the best `TOP_K_EVIDENCE` (8) are labelled `E1…E8` with the reranker's score.
+- `Evidence.header`: "title (type by author)", with a reply's or review's title taken from its parent item (an outer join in every search); `Evidence.type` holds the item type or `decision`.
+- Tests (real embedder and reranker): bob's review is the best evidence for "who reviewed the payment queue PR?", `PAY-1234` and the RabbitMQ PR rank first for their questions, labels run E1… in score order, no duplicates and no private chunk; "what's the weather in Paris?" finds nothing; a crashing search is skipped.
+
+**Key files**
+- `backend/app/chat/search.py`, `backend/config/models.yaml`, `backend/tests/test_search.py`, `decision.md` §23
+
+**Decisions**
+- The reranker reads `header + text`: without the header bob's "LGTM" review scored -11 for "who reviewed the payment queue PR?", with it +4.
+- Reranker threshold -5: unrelated text scores -10 to -11.5, related 2 to 6, weakly related -2 to 0.
+- Threads, not asyncio: SQLAlchemy sessions and the models are synchronous.
+
+**How to run / test**
+- `make test`
+
+**Known issues / TODO**
+- The threshold was measured on a handful of test questions; re-check it on the evaluation set (Task 10.2).
 
 ### Task 6.4 — Graph search  ✅ done
 **Date:** 2026-10-26

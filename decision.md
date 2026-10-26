@@ -422,6 +422,30 @@ Code-level details are in [`progress.md`](progress.md), and how the parts work t
 
 ---
 
+## 23. Finding evidence
+
+**Each source remembers who may see it.** Every sync stores the source's members: Slack channel members, the collaborators of a private GitHub repo, and the Jira users allowed to browse the project. A user sees an item when one of their linked accounts is a member of its source, or when it is public. Checking the tools live during every chat would be slow and would need their APIs on the chat path.
+
+**The permission check is one condition inside every search query.** The searches only ever read rows the user may see, so the best 8 can never be filled with hidden matches. Admins get no bypass: they see what their own accounts see.
+
+**Access changes take up to 15 minutes.** Someone removed from a channel keeps seeing it until the next sync. If a source's member list can't be read, its sync fails and the old list stays, rather than opening the source to everyone.
+
+**Questions are embedded with Qwen3-Embedding's search instruction**, the way the model was trained, while chunks are embedded plain. pgvector's iterative scan keeps the index search going until enough visible chunks are found, otherwise a filtered search can come back short.
+
+**Keyword search treats ids as required.** Words that look like ids, function names or error codes (`PAY-1234`, `charge_card`, `E4012`) must all appear; other words are optional. Requiring every word would miss "what does PAY-1234 say?", and making ids optional would let common words outrank them.
+
+**Graph search finds names by alias, without GLiNER.** Every run of up to six words in the question is compared with the known aliases, using the same name normalisation as the learning side. GLiNER could only add names the graph doesn't know, which can't lead anywhere, so the model call was dropped. Say if you want it back.
+
+**Graph search goes two links out.** From a named service it reaches the PRs and threads that mention it, then their reviews, replies and decisions. That is how "who reviewed the payment queue PR?" finds the review.
+
+**The reranker sees a short header with each piece**, like "Add the payment queue (review by github:bob)". A bare "LGTM" says nothing about which PR it approves; with the header, the review moved from the bottom to the top for "who reviewed…?".
+
+**Evidence the reranker scores very low is dropped** (under -5; unrelated text scores about -11, related text above 0). An unrelated question then finds no evidence at all, and the answer can say it doesn't know without asking the LLM.
+
+**A search that fails is skipped**, so a crashed embedder still leaves keyword and graph results.
+
+---
+
 ## Decisions still waiting for you
 
 **A bigger GLiNER model?** The small one mixes up services and tools and tags some junk as people. `gliner_medium-v2.1` or `gliner_large-v2.1` may do better, at some cost in speed.

@@ -123,3 +123,31 @@ def test_graph_search_respects_permissions(db_session: Session) -> None:
     _pr(db_session, "acme/secret", ["github:repo:acme/secret"])
     assert search.graph_search(db_session, PUBLIC, "who reviewed the payment queue PR?") == []
     assert search.graph_search(db_session, ["github:repo:acme/secret"], "payment queue") != []
+
+
+def test_find_evidence_merges_reranks_and_labels(db_session: Session) -> None:
+    corpus(db_session)
+    _pr(db_session, "acme/queue", PUBLIC)
+
+    def best(question: str) -> search.Evidence:
+        found = search.find_evidence(question, PUBLIC)
+        assert [e.label for e in found] == [f"E{n}" for n in range(1, len(found) + 1)]
+        assert len({e.key for e in found}) == len({e.text for e in found}) == len(found)
+        assert all("Private notes" not in e.text for e in found)
+        assert [e.score for e in found] == sorted((e.score for e in found), reverse=True)
+        return found[0]
+
+    assert best("who reviewed the payment queue PR?").author == "github:bob"
+    assert best("what does PAY-1234 say?").title == "PAY-1234"
+    assert best("why does checkout hand orders to a RabbitMQ queue?").title == "#42"
+    assert search.find_evidence("what's the weather in Paris?", PUBLIC) == []  # all under threshold
+
+
+def test_a_failing_search_is_skipped(db_session: Session) -> None:
+    corpus(db_session)
+
+    def broken(session: Session, tags: list[str], question: str) -> list[search.Evidence]:
+        raise RuntimeError("embedder crashed")
+
+    found = search.find_evidence("PAY-1234", PUBLIC, (broken, search.keyword_search))
+    assert [e.title for e in found] == ["PAY-1234"]

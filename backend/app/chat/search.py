@@ -7,26 +7,34 @@ its SQL query (`permissions.visible`), so hidden items are never fetched, ranked
 - `keyword_search` (6.3): PostgreSQL full-text search on the chunks' GIN index; exact ids
   (`PAY-1234`), function names (`charge_card`) and error codes (`E4012`) must all match.
 - `graph_search` (6.4): entities named in the question, then the knowledge graph 1–2 links out.
+- `find_evidence` (6.5): the three in parallel, merged, de-duplicated and reranked by a
+  cross-encoder; the best TOP_K_EVIDENCE are labelled E1…E8.
 """
 
 from __future__ import annotations
 
+import logging
 import re
-from dataclasses import dataclass
+from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Literal
 
 from sqlalchemy import Text, and_, cast, func, or_, select, text
 from sqlalchemy.dialects.postgresql import TSQUERY
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 from app.chat.permissions import visible
-from app.config.settings import get_settings
+from app.config.settings import get_models_config, get_settings
+from app.db.engine import new_session
 from app.db.schema import Chunk, Decision, Edge, EntityAlias, Item
 from app.learning.link import key, keys_in
 from app.models import gateway
 
 # ids, function names, error codes: a word with a digit, an underscore or an inner capital
+log = logging.getLogger("syncra.chat")
+
 IDENTIFIER = re.compile(r"\b\w[\w-]*?(?:\d|_|[a-z][A-Z])[\w-]*")
 
 
@@ -38,7 +46,8 @@ class Evidence:
     id: int  # chunks.id or decisions.id
     text: str
     item_id: int
-    title: str | None
+    type: str  # the item's type (pr, review, message, …) or "decision"
+    title: str | None  # the item's title, or its parent's (a review shows its PR's title)
     link: str | None
     author: str | None
     created_at: datetime | None
@@ -49,10 +58,24 @@ class Evidence:
     def key(self) -> tuple[str, int]:
         return self.kind, self.id
 
+    @property
+    def header(self) -> str:
+        """`Add the payment queue (review by github:bob)`: what the text is, for the reranker
+        and the answer writer (a bare "LGTM" says nothing about which PR it approves)."""
+        by = f" by {self.author}" if self.author else ""
+        return f"{self.title or 'untitled'} ({self.type}{by})"
 
-def _chunk(chunk: Chunk, item: Item, score: float) -> Evidence:
+
+# A reply's or review's parent item, for its title
+Parent = aliased(Item)
+TITLE = func.coalesce(Item.title, Parent.title)
+WITH_PARENT = (Parent, and_(Parent.source_id == Item.source_id,
+                            Parent.external_id == Item.parent_external_id))  # fmt: skip
+
+
+def _chunk(chunk: Chunk, item: Item, title: str | None, score: float) -> Evidence:
     return Evidence(
-        "chunk", chunk.id, chunk.text, item.id, item.title, item.link, item.author,
+        "chunk", chunk.id, chunk.text, item.id, item.type, title, item.link, item.author,
         item.created_at, float(score),
     )  # fmt: skip
 
@@ -70,13 +93,14 @@ def vector_search(
     session.execute(text("SET LOCAL hnsw.iterative_scan = relaxed_order"))
     distance = Chunk.vector.cosine_distance(vector)
     rows = session.execute(
-        select(Chunk, Item, distance)
+        select(Chunk, Item, TITLE, distance)
         .join(Item, Item.id == Chunk.item_id)
+        .outerjoin(*WITH_PARENT)
         .where(visible(tags), Chunk.vector.is_not(None))
         .order_by(distance)
         .limit(_limit(limit))
     ).all()
-    return [_chunk(chunk, item, 1 - d) for chunk, item, d in rows]
+    return [_chunk(chunk, item, title, 1 - d) for chunk, item, title, d in rows]
 
 
 def keyword_search(
@@ -95,13 +119,14 @@ def keyword_search(
         query = cast(func.replace(anded, "&", "|"), TSQUERY)
     rank = func.ts_rank(Chunk.tsv, query)
     rows = session.execute(
-        select(Chunk, Item, rank)
+        select(Chunk, Item, TITLE, rank)
         .join(Item, Item.id == Chunk.item_id)
+        .outerjoin(*WITH_PARENT)
         .where(visible(tags), Chunk.tsv.op("@@")(query))
         .order_by(rank.desc(), Chunk.id)
         .limit(_limit(limit))
     ).all()
-    return [_chunk(chunk, item, r) for chunk, item, r in rows]
+    return [_chunk(chunk, item, title, r) for chunk, item, title, r in rows]
 
 
 def named_entities(session: Session, question: str) -> set[int]:
@@ -169,10 +194,10 @@ def graph_search(
 
 def _chunks(session: Session, tags: list[str], where: object, score: float) -> list[Evidence]:
     rows = session.execute(
-        select(Chunk, Item).join(Item, Item.id == Chunk.item_id).where(visible(tags), where)
-        .order_by(Chunk.item_id, Chunk.position).limit(_limit(None))
+        select(Chunk, Item, TITLE).join(Item, Item.id == Chunk.item_id).outerjoin(*WITH_PARENT)
+        .where(visible(tags), where).order_by(Chunk.item_id, Chunk.position).limit(_limit(None))
     ).all()  # fmt: skip
-    return [_chunk(chunk, item, score) for chunk, item in rows]
+    return [_chunk(chunk, item, title, score) for chunk, item, title in rows]
 
 
 def _decisions(session: Session, tags: list[str], where: object, score: float) -> list[Evidence]:
@@ -186,9 +211,10 @@ def _decisions(session: Session, tags: list[str], where: object, score: float) -
             d.id,
             decision_text(d),
             item.id,
+            "decision",
             item.title,
             d.link or item.link,
-            item.author,
+            None,
             d.decided_at or item.created_at,
             score,
         )  # fmt: skip
@@ -203,3 +229,47 @@ def decision_text(d: Decision) -> str:
     if d.people:
         lines.append(f"Decided by: {', '.join(d.people)}")
     return "\n".join(lines)
+
+
+Search = Callable[[Session, list[str], str], list[Evidence]]
+SEARCHES: tuple[Search, ...] = (vector_search, keyword_search, graph_search)
+
+
+def find_evidence(
+    question: str,
+    tags: list[str],
+    searches: tuple[Search, ...] = SEARCHES,
+    session_factory: Callable[[], Session] = new_session,
+) -> list[Evidence]:
+    """The best TOP_K_EVIDENCE pieces of evidence for `question` the holder of `tags` may see.
+
+    The searches run in parallel, each in its own database session; one that fails is logged
+    and skipped. Results are merged without duplicates (same chunk / decision, or same text),
+    scored by the cross-encoder, and those under the reranker's `threshold` dropped. The rest
+    are labelled E1, E2, … best first, with the reranker's score.
+    """
+
+    def run(search: Search) -> list[Evidence]:
+        try:
+            with session_factory() as session:
+                return search(session, tags, question)
+        except Exception:  # one broken search must not cost the answer
+            log.exception("%s failed", search.__name__)
+            return []
+
+    with ThreadPoolExecutor(len(searches)) as pool:
+        results = list(pool.map(run, searches))
+    candidates: list[Evidence] = []
+    seen: set[object] = set()
+    for evidence in (e for found in results for e in found):
+        same_text = " ".join(evidence.text.split())
+        if evidence.key not in seen and same_text not in seen:
+            seen |= {evidence.key, same_text}
+            candidates.append(evidence)
+    if not candidates:
+        return []
+    scores = gateway.rerank("reranker", question, [f"{e.header}\n{e.text}" for e in candidates])
+    threshold = get_models_config()["reranker"].threshold
+    ranked = sorted(zip(scores, candidates, strict=True), key=lambda pair: -pair[0])
+    best = [(s, e) for s, e in ranked if s >= threshold][: get_settings().top_k_evidence]
+    return [replace(e, score=s, label=f"E{n}") for n, (s, e) in enumerate(best, 1)]

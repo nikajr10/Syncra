@@ -483,7 +483,7 @@ flowchart LR
 - [x] 6.2 Vector search
 - [x] 6.3 Keyword search
 - [x] 6.4 Graph search
-- [ ] 6.5 Merge and rerank
+- [x] 6.5 Merge and rerank
 
 **Phase 7 — Write and check answers**
 - [ ] 7.1 Answer writer prompt

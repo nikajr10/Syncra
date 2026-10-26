@@ -70,6 +70,9 @@ models:
     runtime: huggingface
     name: cross-encoder/ms-marco-MiniLM-L-6-v2
     revision: 233902d25c440f23af6f7d6e94d2946bac0bee0a  # pinned commit; bump deliberately
+    # Evidence scoring lower is dropped. Raw scores (logits): unrelated text -10 to -11.5,
+    # related 2 to 6, weakly related -2 to 0 (measured on the Phase 6 test questions).
+    threshold: -5.0
   answer_writer: # Qwen3 8B: evidence + history -> cited answer
     runtime: ollama
     name: qwen3:8b
