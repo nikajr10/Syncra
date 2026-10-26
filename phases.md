@@ -486,7 +486,7 @@ flowchart LR
 - [x] 6.5 Merge and rerank
 
 **Phase 7 — Write and check answers**
-- [ ] 7.1 Answer writer prompt
+- [x] 7.1 Answer writer prompt
 - [ ] 7.2 Answer writer step (streaming)
 - [ ] 7.3 Claim checker (DeBERTa NLI)
 - [ ] 7.4 Confidence score

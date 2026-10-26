@@ -76,6 +76,9 @@ models:
   answer_writer: # Qwen3 8B: evidence + history -> cited answer
     runtime: ollama
     name: qwen3:8b
+    prompt: answer_writer.v1  # config/prompts/answer_writer.v1.yaml
+    # 8 pieces of evidence (up to ~400 tokens each) + history + prompt overflow Ollama's 4096
+    options: {num_ctx: 8192, temperature: 0.2}
   claim_checker: # DeBERTa NLI: checks each claim against its evidence
     runtime: huggingface
     name: cross-encoder/nli-deberta-v3-base

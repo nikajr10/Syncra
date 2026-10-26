@@ -4,11 +4,33 @@ Live record of what has been built. Agents add an entry here after every task (f
 
 ## Current status
 
-- **Current phase:** Phase 7 — Write and check answers (Phase 6 complete)
-- **Next task:** 7.1 — Answer writer prompt
-- **Completed tasks:** 0.1–0.6, 1.1–1.6, 2.1–2.3, 3.1–3.4, 4.1–4.4, 5.1–5.3, 5.5, 5.6, 6.1–6.5 (5.4 real model waits for HF_TOKEN)
+- **Current phase:** Phase 7 — Write and check answers
+- **Next task:** 7.2 — Answer writer step (streaming)
+- **Completed tasks:** 0.1–0.6, 1.1–1.6, 2.1–2.3, 3.1–3.4, 4.1–4.4, 5.1–5.3, 5.5, 5.6, 6.1–6.5, 7.1 (5.4 real model waits for HF_TOKEN)
 
 ## Log
+
+### Task 7.1 — Answer writer prompt  ✅ done
+**Date:** 2026-10-26
+
+**Built**
+- `config/prompts/answer_writer.v1.yaml`: answer only from the evidence, cite every claim with `[E#]` right after it, say "I don't know" (and what the evidence does cover) when it doesn't answer, be short, then a `Follow-ups:` line with 2–3 `- ` questions. Evidence, history and question are quoted data that is never obeyed. Two worked examples (a cited answer, an "I don't know"). `string.Template` with `$evidence`, `$history`, `$question`.
+- `config/models.yaml`: `answer_writer` gets `prompt: answer_writer.v1` and `options: {num_ctx: 8192, temperature: 0.2}`.
+- `tests/test_answer.py`: the prompt loads from config, fills its placeholders and carries the rules.
+
+**Key files**
+- `backend/config/prompts/answer_writer.v1.yaml`, `backend/config/models.yaml`, `backend/tests/test_answer.py`
+
+**Decisions**
+- Plain text, not JSON: the answer is streamed word by word, and JSON would only be readable at the end. Follow-ups come after a fixed `Follow-ups:` line the answer step splits off.
+- `num_ctx: 8192`: 8 pieces of evidence (up to ~400 tokens each), the history and the prompt don't fit Ollama's default 4096 tokens, which would silently cut the start of the prompt (the rules).
+- Temperature 0.2: answers stay close to the evidence but don't repeat themselves word for word.
+
+**How to run / test**
+- `make test`
+
+**Known issues / TODO**
+- Real-model quality is checked in the smoke run of Task 7.5 and the evaluation (Task 10.2).
 
 ### Task 6.5 — Merge and rerank  ✅ done
 **Date:** 2026-10-26
