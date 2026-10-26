@@ -10,6 +10,27 @@ Live record of what has been built. Agents add an entry here after every task (f
 
 ## Log
 
+### Cleanup — Optimize and drop the test suite  ✅ done
+**Date:** 2026-10-26
+
+**Built**
+- The full test suite passed one last time, then `backend/tests/` and `frontend/src/api.test.ts` were deleted with pytest, `make test` and `npm test`.
+- Dead code removed: `OllamaClient.generate_json`, unused status constants in `schema.py`, and the test-only dependency hooks (`chat_models`, `action_runner`, `connector_builder`).
+- Web app: the unused Arc dropdown-menu, scroll-area and tooltip are gone with their two Radix packages. The admin pages load only when opened, so the main bundle went from 624 kB to 562 kB.
+
+**Key files**
+- `backend/app/api/{chat,actions,admin}.py`, `backend/app/db/schema.py`, `backend/app/models/gateway.py`
+- `frontend/src/App.tsx` (lazy admin pages), `frontend/package.json`
+
+**Decisions**
+- No test suite (the user's call). Check changes with `make lint`, `npm run build` and the running app.
+
+**How to run / check**
+- `make -C backend lint`, `cd frontend && npm run build`.
+
+**Known issues / TODO**
+- Speed (10.4) is unchanged: what's left there needs a model or setting the user picks (timing.md). The guard check in 5.4 is now a manual chat test once HF_TOKEN is set.
+
 ### Task 9.2 follow-up — A dynamic web app  ✅ done
 **Date:** 2026-10-26
 

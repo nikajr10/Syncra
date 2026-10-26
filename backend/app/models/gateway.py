@@ -125,11 +125,6 @@ class OllamaClient:
             return text
         raise AssertionError("unreachable")
 
-    def generate_json(self, role: str, prompt: str, **kwargs: Any) -> Any:
-        """`generate` in JSON mode, parsed. Raises `ValueError` when the model's JSON is invalid."""
-        kwargs.setdefault("json_mode", True)
-        return json.loads(self.generate(role, prompt, **kwargs))
-
     def stream(
         self,
         role: str,

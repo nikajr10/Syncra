@@ -1,4 +1,4 @@
-.PHONY: install run worker test lint fmt pull-models download-models train-triage db-init migrate \
+.PHONY: install run worker lint fmt pull-models download-models train-triage db-init migrate \
 	train-intent-router add-user link-account demo eval
 
 PYTHON ?= python3.12
@@ -13,9 +13,6 @@ run:
 
 worker:
 	.venv/bin/python -m app.jobs.scheduler
-
-test:
-	.venv/bin/pytest
 
 lint:
 	.venv/bin/ruff check . && .venv/bin/ruff format --check .

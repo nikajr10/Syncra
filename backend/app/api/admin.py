@@ -9,9 +9,9 @@ A new source syncs with the next learning run, or right away with `POST …/sync
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from datetime import datetime
-from typing import Annotated, Any, Literal
+from typing import Any, Literal
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
@@ -23,7 +23,7 @@ from app.api.auth import DB, UNAUTHORIZED, Account, CurrentUser, link_account
 from app.config.settings import get_settings
 from app.db.engine import new_session
 from app.db.schema import Event, Item, Source, User, UserSourceIdentity
-from app.learning.connectors import EXTERNAL_ID, Connector, build_connector
+from app.learning.connectors import EXTERNAL_ID, build_connector
 from app.learning.sync import sync_source
 
 log = logging.getLogger("syncra.admin")
@@ -169,16 +169,11 @@ def change_source(source_id: int, body: SourceChange, session: DB) -> SourceView
     return _view(session, source)
 
 
-def connector_builder() -> Callable[[Source], Connector]:
-    """What fetches a source: the real APIs. Tests override this."""
-    return build_connector
-
-
-def _sync(source_id: int, build: Callable[[Source], Connector]) -> None:
+def _sync(source_id: int) -> None:
     with new_session() as session:
         source = session.get(Source, source_id)
         try:
-            sync_source(session, source, build(source))
+            sync_source(session, source, build_connector(source))
         except Exception as exc:  # recorded for the admin, like the scheduled job does
             session.rollback()
             log.exception("sync failed for %s %s", source.kind, source.name)
@@ -194,12 +189,11 @@ def sync_now(
     source_id: int,
     session: DB,
     background: BackgroundTasks,
-    build: Annotated[Callable[[Source], Connector], Depends(connector_builder)],
 ) -> SourceView:
     """Fetch its new items now, after this answer; watch `last_synced_at` and `last_error` in
     *List sources*. The worker learns from them on its next run."""
     source = _source(session, source_id)
-    background.add_task(_sync, source.id, build)
+    background.add_task(_sync, source.id)
     return _view(session, source)
 
 

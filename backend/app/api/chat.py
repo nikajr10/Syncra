@@ -11,9 +11,9 @@ import re
 from collections.abc import Iterator, Sequence
 from dataclasses import asdict
 from datetime import datetime
-from typing import Annotated, Any
+from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
@@ -61,11 +61,6 @@ class NewMessage(BaseModel):
         max_length=get_settings().chat_message_max_chars,
         examples=["who built the payment service?"],
     )
-
-
-def chat_models() -> dict[str, Any]:
-    """Models for `pipeline.reply` instead of its defaults: none. Tests override this."""
-    return {}
 
 
 def own_chat(session: Session, user: User, chat_id: int) -> ChatSession:
@@ -173,14 +168,13 @@ def send(
     body: NewMessage,
     user: CurrentUser,
     session: DB,
-    models: Annotated[dict[str, Any], Depends(chat_models)],
 ) -> pipeline.Reply:
     """Reply to one message and save the turn. `path` says how it was handled: `small_talk`
     (an instant reply), `question` (an answer citing its `sources` as [E1]…, with a
     `confidence` and `follow_ups`) or `action`, or `blocked` (a prompt attack, not saved).
     `question` is the message rewritten to stand on its own."""
     chat = own_chat(session, user, chat_id)
-    return pipeline.reply(session, chat, body.message, **models)
+    return pipeline.reply(session, chat, body.message)
 
 
 STREAM_DOC = {
@@ -209,7 +203,6 @@ def send_streamed(
     body: NewMessage,
     user: CurrentUser,
     session: DB,
-    models: Annotated[dict[str, Any], Depends(chat_models)],
 ) -> StreamingResponse:
     """Like *Send a message*, but the answer arrives word by word as Server-Sent Events. The
     streamed words are the draft; the `done` event carries the checked reply that was saved."""
@@ -218,7 +211,7 @@ def send_streamed(
     def events() -> Iterator[str]:
         with new_session() as stream_session:  # the request's session may close first
             chat = stream_session.get(ChatSession, chat_id)
-            for event in pipeline.stream(stream_session, chat, body.message, **models):
+            for event in pipeline.stream(stream_session, chat, body.message):
                 if isinstance(event, str):
                     yield _event("token", {"text": event})
                 else:

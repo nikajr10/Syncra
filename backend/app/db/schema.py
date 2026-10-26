@@ -7,7 +7,7 @@ this module is the ORM view used by queries.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Literal, get_args
+from typing import Any, Literal
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
@@ -30,13 +30,8 @@ from app.config.settings import get_settings
 
 EMBEDDING_DIM = get_settings().embedding_dim
 
-# Allowed values (kept here so every writer agrees; small enough not to need config)
-SourceKind = Literal["github", "jira", "slack"]
+# Item types a connector may write
 ItemType = Literal["pr", "commit", "review", "issue", "comment", "message", "thread"]
-SOURCE_KINDS = get_args(SourceKind)
-ITEM_TYPES = get_args(ItemType)
-ITEM_STATUSES = ("new", "processed", "noise", "failed")
-ACTION_STATUSES = ("pending", "approved", "rejected", "done", "failed")
 
 
 def _created_at() -> Mapped[datetime]:

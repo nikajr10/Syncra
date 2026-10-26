@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 import { Activity, CheckSquare, Menu, Plus, Search, Unplug, Users, X } from 'lucide-react'
 import { api, setOnUnauthorized, token, type Card, type Chat, type Me } from '@/api'
 import { Badge } from '@/components/arc/badge/badge'
@@ -6,11 +6,15 @@ import { CommandPalette, type CommandItem } from '@/components/arc/command-palet
 import { Dialog, DialogContent } from '@/components/arc/dialog/dialog'
 import { ToastStack, ToastStackProvider } from '@/components/arc/toast-stack/toast-stack'
 import { UserMenu, type ThemePreference } from '@/components/arc/user-menu/user-menu'
-import { ActivityPage, PeoplePage, SourcesPage } from './Admin'
 import { Approvals, ChatView } from './Chat'
 import Login from './Login'
 import { go, timeAgo, useHash } from './ui'
 import s from './App.module.css'
+
+// Admin pages load on first visit, so other users never download them.
+const SourcesPage = lazy(() => import('./Admin').then(m => ({ default: m.SourcesPage })))
+const PeoplePage = lazy(() => import('./Admin').then(m => ({ default: m.PeoplePage })))
+const ActivityPage = lazy(() => import('./Admin').then(m => ({ default: m.ActivityPage })))
 
 export default function App() {
   const [me, setMe] = useState<Me | null | undefined>(() => (token.get() ? undefined : null)) // undefined while checking the saved token
@@ -164,7 +168,7 @@ function Shell({ me, onSignOut }: { me: Me; onSignOut: () => Promise<void> }) {
           <span className={s.topTitle}>{chatId ? chats.find(c => c.id === chatId)?.title : 'Syncra'}</span>
           <a href="#/" className={s.iconButton} aria-label="New chat"><Plus size={20} strokeWidth={1.75} /></a>
         </header>
-        {main}
+        <Suspense>{main}</Suspense>
       </main>
 
       <Dialog open={paletteOpen} onOpenChange={setPaletteOpen}>

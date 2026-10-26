@@ -9,9 +9,9 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from datetime import datetime
-from typing import Annotated, Any
+from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 
@@ -36,11 +36,6 @@ class Card(BaseModel):
         description="Once run: the ticket's key and link, or the error"
     )
     created_at: datetime
-
-
-def action_runner() -> actions.CreateIssue:
-    """What creates the Jira ticket: the real Jira API. Tests override this."""
-    return actions._jira_create
 
 
 def _pending(session: DB, user: CurrentUser, action_id: int) -> Action:
@@ -69,11 +64,10 @@ def approve(
     action_id: int,
     user: CurrentUser,
     session: DB,
-    create: Annotated[actions.CreateIssue, Depends(action_runner)],
 ) -> Action:
     """Run a pending action with your permissions. `status` ends as `done` with the result
     (the new ticket's key and link) or `failed` with the error."""
-    return actions.approve(session, _pending(session, user, action_id), user, create)
+    return actions.approve(session, _pending(session, user, action_id), user)
 
 
 @router.post(

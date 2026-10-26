@@ -26,7 +26,7 @@ Syncra is a team-memory chatbot. A **learning pipeline** (offline, every 15 min)
 ## 3. Current state of the repo
 
 - Planning docs are written: `description.md`, `phases.md`, `agent.md`, `progress.md`.
-- **The Python project lives in `backend/`** (decided in Task 0.1): package `backend/app/`, yaml in `backend/config/`, `backend/tests/`, `backend/scripts/`, `backend/pyproject.toml`, `backend/Makefile`. Commands (from `backend/`): `make install`, `make run`, `make test`, `make lint`.
+- **The Python project lives in `backend/`** (decided in Task 0.1): package `backend/app/`, yaml in `backend/config/`, `backend/scripts/`, `backend/pyproject.toml`, `backend/Makefile`. Commands (from `backend/`): `make install`, `make run`, `make lint`. The web app is in `frontend/`: `npm run dev`, `npm run build`.
 - **The learning pipeline is complete (Phases 1–4):** `make worker` runs `app/learning/pipeline.py: learn()` every `SYNC_INTERVAL_MINUTES` (sync → scrub → triage → chunk → entities → decisions → embed → link → store).
 - **The chat is complete (Phases 5–8):** `app/chat/pipeline.py` runs memory → guard → intent → rewrite → search (`app/chat/search.py`, permission-filtered by `app/chat/permissions.py`) → answer (`answer.py`) → check + confidence (`check.py`), or plans an action (`actions.py`). Endpoints: `app/api/chat.py` (JSON and Server-Sent Events), `app/api/actions.py`, admin endpoints in `app/api/admin.py` (sources, account links, `/admin/status`).
 - **Phase 10:** `make demo` loads the fictional company in `backend/demo/company.yaml` (demo sources use `DemoConnector`, never a real API); `make eval` scores the chat on `backend/demo/eval.yaml`; `timing.md` is the speed report; `app/monitor.py` records events for admins. Change a prompt by adding a new version file and pointing `config/models.yaml` at it; re-run `make eval` after any change to search, prompts or the checker.
@@ -45,7 +45,7 @@ Syncra is a team-memory chatbot. A **learning pipeline** (offline, every 15 min)
 2. **Check dependencies.** Every task in its **Depends on** line must be marked done in `progress.md`. If not, stop and report it — don't build the missing task yourself unless asked.
 3. **Read the code that exists.** Follow patterns, names and libraries earlier tasks chose (see **Decisions** in the `progress.md` log).
 4. **Build only that task.** Follow its **Build** list. No extra features, no work on later tasks.
-5. **Test.** Write tests for the task and run the **whole** test suite. Everything must pass.
+5. **Check.** The repo keeps no test suite (the user's call, 2026-10-26). Run `make lint` and `npm run build`, then try the change in the running app.
 6. **Check "Done when".** Every item must be true. If one can't be met, say so in the log — don't hide it.
 7. **Update the docs:**
    - Add a log entry to `progress.md` (format below) and update its **Current status**.
@@ -74,7 +74,7 @@ Add new entries **at the top** of the **Log** section in `progress.md`:
 **Decisions**
 - Choices later agents must follow (library picked, naming, folder layout, config keys).
 
-**How to run / test**
+**How to run / check**
 - Commands.
 
 **Known issues / TODO**
@@ -94,7 +94,7 @@ Then update **Current status** (current phase, next task, completed task list).
 - **All model calls go through the model gateway** (built in Task 0.5).
 - **Privacy first.** Data is scrubbed before it is stored. Searches filter by user permissions **inside** the query.
 - **Answers must cite evidence** (`[E1]…[E8]`). Actions need user approval.
-- **Tests use fakes.** Mock GitHub, Jira, Slack and Ollama in tests. Never commit real tokens or `.env`.
+- **No secrets in git.** Never commit real tokens or `.env`.
 - **Keep it simple.** Smallest working solution for the task; no speculative abstractions.
 - **No tables in the docs.** The user finds markdown tables hard to read: write short paragraphs (2–3 lines each) or simple lists instead.
 
