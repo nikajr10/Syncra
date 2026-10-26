@@ -20,7 +20,6 @@ from app.db.schema import Item
 from app.learning.chunk import AUTHOR
 from app.learning.entities import FoundEntity
 from app.models import gateway
-from app.models.gateway import OllamaClient
 
 log = logging.getLogger("syncra.learning.decisions")
 
@@ -44,7 +43,6 @@ SCHEMA = FoundDecision.model_json_schema()
 def read_decision(
     thread: Sequence[Item],
     entities: Iterable[FoundEntity] = (),
-    client: OllamaClient | None = None,
 ) -> FoundDecision | None:
     """The decision `thread` records, or None.
 
@@ -64,7 +62,7 @@ def read_decision(
     names = dict.fromkeys(f"{e.name} ({e.type})" for e in entities)
     prompt = get_prompt("decision_reader")
     user = Template(prompt.prompt).substitute(entities=", ".join(names) or "none", thread=text)
-    client = client or gateway.ollama()
+    client = gateway.ollama()
     for attempt in (1, 2):  # bad output: one retry, then drop
         reply = client.generate("decision_reader", user, system=prompt.system, json_mode=SCHEMA)
         try:

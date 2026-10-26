@@ -20,7 +20,6 @@ from app.chat.search import Evidence
 from app.config.settings import get_prompt, get_settings
 from app.db.schema import ChatMessage
 from app.models import gateway
-from app.models.gateway import OllamaClient
 
 TAG = re.compile(r"</?\s*(?:evidence|history|question)\b[^>]*>", re.I)
 FOLLOW_UPS = re.compile(r"^\W*follow[- ]?ups?\W*$", re.I | re.M)
@@ -55,7 +54,6 @@ def write(
     question: str,
     evidence: Sequence[Evidence],
     history: Sequence[ChatMessage] = (),
-    client: OllamaClient | None = None,
 ) -> Iterator[str]:
     """The answer to `question` from `evidence` (labelled E1…), piece by piece."""
     if not evidence:
@@ -67,7 +65,7 @@ def write(
         history=render_history(history),
         question=TAG.sub("", question),
     )
-    yield from (client or gateway.chat_ollama()).stream("answer_writer", user, system=prompt.system)
+    yield from gateway.chat_ollama().stream("answer_writer", user, system=prompt.system)
 
 
 def split(text: str) -> tuple[str, list[str]]:

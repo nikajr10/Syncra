@@ -9,12 +9,8 @@ an attack out of view.
 
 from __future__ import annotations
 
-from collections.abc import Callable
-
 from app.config.settings import get_models_config
 from app.models import gateway
-
-Detect = Callable[[list[str]], list[float]]  # texts -> how likely each is an attack (0–1)
 
 BLOCKED_REPLY = (
     "Sorry, I can't help with that request. Ask me about your team's work: who built "
@@ -22,9 +18,7 @@ BLOCKED_REPLY = (
 )
 
 
-def _model(texts: list[str]) -> list[float]:
-    return gateway.label_scores("prompt_guard", texts, "MALICIOUS")
-
-
-def is_attack(text: str, detect: Detect = _model) -> bool:
-    return detect([text])[0] >= get_models_config()["prompt_guard"].threshold
+def is_attack(text: str) -> bool:
+    # how likely `text` is an attack, 0–1
+    score = gateway.label_scores("prompt_guard", [text], "MALICIOUS")[0]
+    return score >= get_models_config()["prompt_guard"].threshold

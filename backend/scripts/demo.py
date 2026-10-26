@@ -8,11 +8,9 @@ Running it again changes nothing unless the file changed. For local demos, not p
 
 import os
 import sys
-from collections.abc import Callable
 from getpass import getpass
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
 
 from app.api.auth import add_user, link_account
 from app.db.engine import new_session
@@ -21,9 +19,9 @@ from app.learning.connectors.demo import company
 from app.learning.pipeline import learn
 
 
-def load(password: str, session_factory: Callable[[], Session] = new_session, **models) -> dict:
+def load(password: str) -> dict:
     data = company()
-    with session_factory() as session:
+    with new_session() as session:
         for username, user in data["users"].items():
             if not session.scalar(select(User.id).where(User.username == username)):
                 add_user(session, username, password, user["name"])
@@ -37,7 +35,7 @@ def load(password: str, session_factory: Callable[[], Session] = new_session, **
                 session.add(Source(kind=spec["kind"], external_id=spec["external_id"],
                                    name=spec["name"], config={"demo": True}))  # fmt: skip
         session.commit()
-    return learn(session_factory, **models)
+    return learn()
 
 
 if __name__ == "__main__":

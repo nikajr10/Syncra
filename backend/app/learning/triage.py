@@ -9,7 +9,7 @@ and is skipped by later stages; useful items stay "new" for the chunker.
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -18,12 +18,6 @@ from app.db.schema import Item
 from app.models import gateway
 
 log = logging.getLogger("syncra.learning.triage")
-
-Classify = Callable[[list[str]], list[str]]  # texts -> "useful" | "noise" each
-
-
-def _model(texts: list[str]) -> list[str]:
-    return gateway.classify("triage", texts)
 
 
 def is_bot(author: str | None) -> bool:
@@ -43,22 +37,23 @@ def is_review_verdict(item: Item) -> bool:
     return item.type == "review" and verdict and not is_bot(item.author)
 
 
-def triage(items: Sequence[Item], classify: Classify = _model) -> list[str]:
+def triage(items: Sequence[Item]) -> list[str]:
     """Label each item "useful" or "noise": the rules first, then the classifier."""
     labels = ["useful" if is_review_verdict(item) else "noise" for item in items]
     keep = [
         n for n, item in enumerate(items) if labels[n] == "noise" and not is_obvious_noise(item)
     ]
-    for n, label in zip(keep, classify([items[n].full_text for n in keep]), strict=True):
+    texts = [items[n].full_text for n in keep]
+    for n, label in zip(keep, gateway.classify("triage", texts), strict=True):
         labels[n] = label
     return labels
 
 
-def triage_new_items(session: Session, classify: Classify = _model) -> list[Item]:
+def triage_new_items(session: Session) -> list[Item]:
     """Triage every "new" item: noise gets status "noise"; returns the useful ones, still "new"."""
     items = session.scalars(select(Item).where(Item.status == "new").order_by(Item.id)).all()
     useful = []
-    for item, label in zip(items, triage(items, classify), strict=True):
+    for item, label in zip(items, triage(items), strict=True):
         if label == "noise":
             item.status = "noise"
         else:

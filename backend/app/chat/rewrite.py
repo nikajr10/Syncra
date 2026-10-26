@@ -21,7 +21,7 @@ from app import monitor
 from app.config.settings import get_prompt, get_settings
 from app.db.schema import ChatMessage
 from app.models import gateway
-from app.models.gateway import OllamaClient, OllamaError
+from app.models.gateway import OllamaError
 
 log = logging.getLogger("syncra.chat.rewrite")
 
@@ -39,9 +39,7 @@ class Rewritten(BaseModel):
 SCHEMA = Rewritten.model_json_schema()
 
 
-def rewrite(
-    message: str, history: Sequence[ChatMessage], client: OllamaClient | None = None
-) -> str:
+def rewrite(message: str, history: Sequence[ChatMessage]) -> str:
     """`message` as a standalone question, using the chat `history` (oldest first)."""
     if not history:
         return message
@@ -52,7 +50,7 @@ def rewrite(
     prompt = get_prompt("question_rewriter")
     user = Template(prompt.prompt).substitute(history=text, message=TAG.sub("", message))
     try:
-        reply = (client or gateway.chat_ollama()).generate(
+        reply = gateway.chat_ollama().generate(
             "question_rewriter", user, system=prompt.system, json_mode=SCHEMA
         )
         question = Rewritten.model_validate_json(reply).question

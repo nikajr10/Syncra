@@ -113,29 +113,26 @@ def sync_source(
     return changed
 
 
-def sync_all_sources(
-    session_factory: Callable[[], Session] = new_session,
-    build: Callable[[Source], Connector] = build_connector,
-) -> dict[str, int | str]:
+def sync_all_sources() -> dict[str, int | str]:
     """The scheduled job (Task 1.6): every enabled source -> connector -> scrub -> save.
 
     Each source runs in its own session. A failing source is logged, recorded in
     `sources.last_error` and skipped; the others still run. Saved items have status "new",
     which is the queue for Phase 2. Returns {source name: rows changed | error message}.
     """
-    with session_factory() as session:
+    with new_session() as session:
         source_ids = session.scalars(
             select(Source.id).where(Source.enabled.is_(True)).order_by(Source.id)
         ).all()
 
     results: dict[str, int | str] = {}
     for source_id in source_ids:
-        with session_factory() as session:
+        with new_session() as session:
             source = session.get(Source, source_id)
             if source is None:
                 continue
             try:
-                results[source.name] = sync_source(session, source, build(source))
+                results[source.name] = sync_source(session, source, build_connector(source))
             except Exception as exc:  # one bad source must not stop the others
                 session.rollback()
                 log.exception("sync failed for %s %s", source.kind, source.name)

@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import logging
 import re
-from collections.abc import Callable
 from string import Template
 from typing import Any, Literal
 
@@ -25,7 +24,6 @@ from app.chat.permissions import user_tags
 from app.config.settings import get_prompt
 from app.db.schema import Action, ChatSession, Source, User
 from app.models import gateway
-from app.models.gateway import OllamaClient
 
 log = logging.getLogger("syncra.actions")
 
@@ -66,9 +64,7 @@ def jira_projects(session: Session, user_id: int) -> dict[str, str]:
     return {s.external_id: s.name for s in sources if s.access_tag in tags}
 
 
-def plan(
-    session: Session, chat: ChatSession, request: str, client: OllamaClient | None = None
-) -> Action | None:
+def plan(session: Session, chat: ChatSession, request: str) -> Action | None:
     """A pending action for `request` (flushed, not committed), or None when it isn't one Syncra
     can do. Raises `OllamaError` when Ollama is down."""
     projects = jira_projects(session, chat.user_id)
@@ -77,7 +73,7 @@ def plan(
     prompt = get_prompt("action_planner")
     listed = ", ".join(f"{key} ({TAG.sub('', name)})" for key, name in projects.items())
     user = Template(prompt.prompt).substitute(projects=listed, request=TAG.sub("", request))
-    reply = (client or gateway.chat_ollama()).generate(
+    reply = gateway.chat_ollama().generate(
         "action_planner", user, system=prompt.system, json_mode=SCHEMA
     )
     try:
@@ -102,8 +98,6 @@ def plan(
 
 
 # --- approve / reject (Task 8.2) -------------------------------------------------------------
-
-CreateIssue = Callable[[str, str, str], dict[str, Any]]  # project, title, description -> result
 
 
 class NotPending(Exception):
@@ -134,9 +128,7 @@ def reject(session: Session, action: Action, user: User) -> Action:
     return action
 
 
-def approve(
-    session: Session, action: Action, user: User, create: CreateIssue = _jira_create
-) -> Action:
+def approve(session: Session, action: Action, user: User) -> Action:
     """Run the approved action with the user's permissions and record the result."""
     payload = action.payload
     log.info("action %s approved by %s: %s", action.id, user.username, payload)
@@ -147,7 +139,7 @@ def approve(
     else:
         description = f"{payload['description']}\n\nRequested by {user.username} via Syncra."
         try:
-            action.result = create(payload["project"], payload["title"], description)
+            action.result = _jira_create(payload["project"], payload["title"], description)
             action.status = "done"
         except Exception as exc:  # Jira down, no permission, bad project: recorded, not raised
             log.exception("action %s failed", action.id)

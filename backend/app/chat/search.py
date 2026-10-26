@@ -245,12 +245,7 @@ Search = Callable[[Session, list[str], str], list[Evidence]]
 SEARCHES: tuple[Search, ...] = (vector_search, keyword_search, graph_search)
 
 
-def find_evidence(
-    question: str,
-    tags: list[str],
-    searches: tuple[Search, ...] = SEARCHES,
-    session_factory: Callable[[], Session] = new_session,
-) -> list[Evidence]:
+def find_evidence(question: str, tags: list[str]) -> list[Evidence]:
     """The best TOP_K_EVIDENCE pieces of evidence for `question` the holder of `tags` may see.
 
     The searches run in parallel, each in its own database session; one that fails is logged
@@ -261,14 +256,14 @@ def find_evidence(
 
     def run(search: Search) -> list[Evidence]:
         try:
-            with session_factory() as session:
+            with new_session() as session:
                 return search(session, tags, question)
         except Exception:  # one broken search must not cost the answer
             log.exception("%s failed", search.__name__)
             return []
 
-    with ThreadPoolExecutor(len(searches)) as pool:
-        results = list(pool.map(run, searches))
+    with ThreadPoolExecutor(len(SEARCHES)) as pool:
+        results = list(pool.map(run, SEARCHES))
     candidates: list[Evidence] = []
     seen: set[object] = set()
     for evidence in (e for found in results for e in found):
@@ -278,7 +273,7 @@ def find_evidence(
             candidates.append(evidence)
     if not candidates:
         return []
-    with session_factory() as session:
+    with new_session() as session:
         candidates = with_names(session, candidates)
     scores = gateway.rerank("reranker", question, [f"{e.header}\n{e.text}" for e in candidates])
     threshold = get_models_config()["reranker"].threshold

@@ -18,7 +18,7 @@ draft; the `Reply` is what was saved and what the user should end up seeing.
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable, Iterator
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
@@ -33,7 +33,7 @@ from app.chat.permissions import user_tags
 from app.chat.rewrite import rewrite
 from app.config.settings import get_settings
 from app.db.schema import ChatMessage, ChatSession
-from app.models.gateway import OllamaClient, OllamaError
+from app.models.gateway import OllamaError
 
 log = logging.getLogger("syncra.chat")
 
@@ -48,8 +48,6 @@ CANT_DO = (
 UNSUPPORTED = "I don't know: the evidence I found doesn't back up an answer."
 UNAVAILABLE = "Sorry, I can't write an answer right now: the language model isn't reachable."
 EXCERPT_CHARS = 300
-
-Find = Callable[[str, list[str]], list[search.Evidence]]
 
 
 @dataclass(frozen=True)
@@ -76,40 +74,32 @@ def source(e: search.Evidence) -> dict[str, Any]:
     }
 
 
-def stream(
-    session: Session,
-    chat: ChatSession,
-    message: str,
-    classify: intent.Classify = intent._model,
-    detect: guard.Detect = guard._model,
-    client: OllamaClient | None = None,
-    find: Find = search.find_evidence,
-) -> Iterator[str | Reply]:
+def stream(session: Session, chat: ChatSession, message: str) -> Iterator[str | Reply]:
     """The reply to one message in `chat`, piece by piece, then the `Reply`; saves the turn.
     Logs the time each stage took; a reply slower than SLOW_ANSWER_SECONDS is recorded."""
     timer = monitor.Timer()
     history = last_turns(session, chat.id)
     timer.lap("memory")
-    if guard.is_attack(message, detect):
+    if guard.is_attack(message):
         log.warning("prompt guard blocked a message in chat %s", chat.id)
         yield Reply(BLOCKED, guard.BLOCKED_REPLY)
         return
     timer.lap("guard")
-    path = intent.route(message, classify)
+    path = intent.route(message)
     timer.lap("intent")
     if path == SMALL_TALK:
         done = Reply(SMALL_TALK, intent.small_talk_reply(message))
     else:
-        question = rewrite(message, history, client)
-        if question != message and guard.is_attack(question, detect):
+        question = rewrite(message, history)
+        if question != message and guard.is_attack(question):
             log.warning("prompt guard flagged the rewritten question in chat %s", chat.id)
             question = message
         timer.lap("rewrite")
         if path == ACTION:
-            done = _plan(session, chat, question, client)
+            done = _plan(session, chat, question)
             timer.lap("plan")
         else:
-            done = yield from _answer(session, chat, question, history, client, find, timer)
+            done = yield from _answer(session, chat, question, history, timer)
     add_message(session, chat, "user", message)
     if done.reply != UNAVAILABLE:  # an outage isn't an answer: the question stays unanswered
         add_message(session, chat, "assistant", done.reply, done.sources, done.confidence)
@@ -131,15 +121,13 @@ def _answer(
     chat: ChatSession,
     question: str,
     history: list[ChatMessage],
-    client: OllamaClient | None,
-    find: Find,
     timer: monitor.Timer,
 ) -> Iterator[str | Reply]:
-    evidence = find(question, user_tags(session, chat.user_id))
+    evidence = search.find_evidence(question, user_tags(session, chat.user_id))
     timer.lap("search")
     pieces = []
     try:
-        for piece in answer.write(question, evidence, history, client):
+        for piece in answer.write(question, evidence, history):
             if not pieces:
                 timer.lap("first_word")
             pieces.append(piece)
@@ -160,9 +148,9 @@ def _answer(
     return Reply(QUESTION, text, question, sources, confidence(checked, evidence), follow_ups)
 
 
-def _plan(session: Session, chat: ChatSession, request: str, client: OllamaClient | None) -> Reply:
+def _plan(session: Session, chat: ChatSession, request: str) -> Reply:
     try:
-        action = actions.plan(session, chat, request, client)
+        action = actions.plan(session, chat, request)
     except OllamaError as exc:
         log.exception("action planner failed in chat %s", chat.id)
         monitor.record("model_error", f"Action planner: {exc}", chat_id=chat.id)
@@ -173,8 +161,8 @@ def _plan(session: Session, chat: ChatSession, request: str, client: OllamaClien
     return Reply(ACTION, text, request, action=actions.card(action))
 
 
-def reply(session: Session, chat: ChatSession, message: str, **models: Any) -> Reply:
+def reply(session: Session, chat: ChatSession, message: str) -> Reply:
     """`stream`, without the pieces: the final `Reply`."""
-    *_, done = stream(session, chat, message, **models)
+    *_, done = stream(session, chat, message)
     assert isinstance(done, Reply)
     return done

@@ -8,13 +8,10 @@ The classifier is trained on config/intent_router.yaml (`make train-intent-route
 from __future__ import annotations
 
 import re
-from collections.abc import Callable
 
 from app.models import gateway
 
 SMALL_TALK, QUESTION, ACTION = "small_talk", "question", "action"  # labels in intent_router.yaml
-
-Classify = Callable[[list[str]], list[str]]  # messages -> one label each
 
 HELP = (
     "I'm Syncra, your team's memory. Ask me about your GitHub, Jira and Slack: who built "
@@ -47,13 +44,9 @@ REPLIES = (  # small talk: the first pattern found in the message picks the repl
 )
 
 
-def _model(messages: list[str]) -> list[str]:
-    return gateway.classify("intent_router", messages)
-
-
-def route(message: str, classify: Classify = _model) -> str:
+def route(message: str) -> str:
     """The path a message takes: SMALL_TALK, QUESTION or ACTION."""
-    return classify([message])[0]
+    return gateway.classify("intent_router", [message])[0]
 
 
 def small_talk_reply(message: str) -> str:
