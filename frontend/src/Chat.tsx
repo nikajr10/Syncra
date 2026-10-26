@@ -1,7 +1,6 @@
 import { Fragment, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { ArrowUp, ArrowUpRight, PenLine, ShieldAlert } from 'lucide-react'
 import { api, streamMessage, type Card, type Chat, type Confidence, type Message, type Reply, type Source, type Suggestions } from '@/api'
-import { ActionButton } from '@/components/arc/action-button/action-button'
 import { Alert } from '@/components/arc/alert/alert'
 import { Badge, type BadgeTone } from '@/components/arc/badge/badge'
 import { Button } from '@/components/arc/button/button'
@@ -11,7 +10,6 @@ import { ExpandableText } from '@/components/arc/expandable-text/expandable-text
 import { HoverCard } from '@/components/arc/hover-card/hover-card'
 import SegmentedControl from '@/components/arc/segmented-control/segmented-control'
 import { Skeleton } from '@/components/arc/skeleton/skeleton'
-import { TextShimmer } from '@/components/arc/text-shimmer/text-shimmer'
 import { BrandIcon, TOOL_NAME, TypeIcon, timeAgo, toolOf, typeName } from './ui'
 import s from './Chat.module.css'
 import page from './page.module.css'
@@ -134,7 +132,7 @@ export function ChatView({ chatId, name, actions, onChatCreated, onReplied, onCa
             return (
               <Fragment key={i}>
                 {t.role === 'user'
-                  ? <div className={s.user} data-new={!t.created_at || undefined}><p>{t.content}</p></div>
+                  ? <div className={s.user}><p>{t.content}</p></div>
                   : <Answer turn={t} onAsk={send} canAsk={!busy && t === last} retry={t.error && i > 0 ? () => send(turns[i - 1].content) : undefined} />}
                 {card && <ActionCard card={card} onChange={onCardChange} />}
               </Fragment>
@@ -162,13 +160,13 @@ function Starters({ suggested, onAsk, onDraft }: { suggested: Suggestions | null
   )
   return (
     <div className={s.starters}>
-      {questions.map((q, i) => (
-        <button key={q} type="button" className={s.starter} style={{ animationDelay: `${i * 40}ms` }} onClick={() => onAsk(q)}>
+      {questions.map(q => (
+        <button key={q} type="button" className={s.starter} onClick={() => onAsk(q)}>
           <span>{q}</span><ArrowUpRight size={16} strokeWidth={1.75} aria-hidden="true" />
         </button>
       ))}
       {project && (
-        <button type="button" className={s.starter} style={{ animationDelay: `${questions.length * 40}ms` }} onClick={() => onDraft(`Open a Jira ticket in ${project} to `)}>
+        <button type="button" className={s.starter} onClick={() => onDraft(`Open a Jira ticket in ${project} to `)}>
           <span>Open a Jira ticket in {project}…<span className={s.starterNote}>You finish the sentence, then approve the card</span></span>
           <PenLine size={16} strokeWidth={1.75} aria-hidden="true" />
         </button>
@@ -200,12 +198,12 @@ function Answer({ turn, onAsk, canAsk, retry }: { turn: Turn; onAsk: (q: string)
     </div>
   )
   if (turn.streaming && !turn.content) return (
-    <div className={s.answer} aria-live="polite" data-new><TextShimmer>Searching your team's memory</TextShimmer></div>
+    <div className={s.answer} aria-live="polite"><p className={s.metaText}>Searching your team's memory…</p></div>
   )
 
   const shown = allSources ? sources : sources.slice(0, 3)
   return (
-    <article className={s.answer} aria-busy={turn.streaming || undefined} data-new={!turn.created_at || undefined}>
+    <article className={s.answer} aria-busy={turn.streaming || undefined}>
       <div className={s.prose} data-streaming={turn.streaming || undefined}>
         <Cited text={turn.content} sources={sources} />
       </div>
@@ -362,13 +360,15 @@ const STATUS: Record<Card['status'], [BadgeTone, string]> = {
 }
 
 export function ActionCard({ card, onChange, chatLink }: { card: Card; onChange: (card: Card) => void; chatLink?: boolean }) {
-  const [rejecting, setRejecting] = useState(false)
+  const [busy, setBusy] = useState<'approve' | 'reject' | null>(null)
   const [error, setError] = useState('')
   const [tone, label] = STATUS[card.status]
 
-  const run = async (call: () => Promise<Card>) => {
+  const run = async (which: 'approve' | 'reject') => {
     setError('')
-    try { onChange(await call()) } catch (err) { setError(err instanceof Error ? err.message : 'That did not work'); throw err }
+    setBusy(which)
+    try { onChange(await api[which](card.id)) } catch (err) { setError(err instanceof Error ? err.message : 'That did not work') }
+    setBusy(null)
   }
 
   return (
@@ -383,8 +383,8 @@ export function ActionCard({ card, onChange, chatLink }: { card: Card; onChange:
 
       {card.status === 'pending' && (
         <div className={s.cardActions}>
-          <Button variant="ghost" size="sm" loading={rejecting} onClick={() => { setRejecting(true); run(() => api.reject(card.id)).catch(() => setRejecting(false)) }}>Reject</Button>
-          <ActionButton label="Approve and create" pendingLabel="Creating ticket" successLabel="Created" onAction={() => run(() => api.approve(card.id))} onActionError={() => {}} />
+          <Button variant="ghost" size="sm" loading={busy === 'reject'} disabled={!!busy} onClick={() => run('reject')}>Reject</Button>
+          <Button variant="primary" size="sm" loading={busy === 'approve'} disabled={!!busy} onClick={() => run('approve')}>Approve and create</Button>
         </div>
       )}
       {card.status === 'done' && card.result?.key && (

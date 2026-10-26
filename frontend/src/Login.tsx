@@ -4,7 +4,6 @@ import { Alert } from '@/components/arc/alert/alert'
 import { Button } from '@/components/arc/button/button'
 import { Input } from '@/components/arc/input/input'
 import { PasswordField } from '@/components/arc/password-field/password-field'
-import { BrandIcon } from './ui'
 import s from './Login.module.css'
 
 export default function Login({ onLogin }: { onLogin: (me: Me) => void }) {
@@ -28,16 +27,10 @@ export default function Login({ onLogin }: { onLogin: (me: Me) => void }) {
 
   return (
     <div className={s.page}>
-      <svg className={s.rings} viewBox="0 0 800 800" aria-hidden="true">
-        {[120, 200, 280, 360].map(r => <circle key={r} cx="400" cy="400" r={r} />)}
-      </svg>
       <main className={s.card}>
         <img src="/favicon.svg" alt="" width={40} height={40} className={s.logo} />
         <h1 className={s.title}>Sign in to Syncra</h1>
         <p className={s.lead}>Ask what your team knows. Every answer shows where it came from.</p>
-        <div className={s.tools} role="img" aria-label="Learns from GitHub, Jira and Slack">
-          <BrandIcon tool="github" /><BrandIcon tool="jira" /><BrandIcon tool="slack" />
-        </div>
         <form className={s.form} onSubmit={submit}>
           <Input label="Username" name="username" autoComplete="username" autoCapitalize="none" spellCheck={false} required autoFocus />
           <PasswordField label="Password" name="password" autoComplete="current-password" required />

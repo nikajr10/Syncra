@@ -2,18 +2,15 @@ import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from
 import { CircleAlert, Plus, RefreshCw, Timer } from 'lucide-react'
 import { api, type SourceView, type Tool, type UserView } from '@/api'
 import { Alert } from '@/components/arc/alert/alert'
-import { Avatar } from '@/components/arc/avatar/avatar'
 import { Badge } from '@/components/arc/badge/badge'
 import { Button } from '@/components/arc/button/button'
 import { Dialog, DialogContent } from '@/components/arc/dialog/dialog'
 import { EmptyState } from '@/components/arc/empty-state/empty-state'
 import { ExpandableText } from '@/components/arc/expandable-text/expandable-text'
 import { Input } from '@/components/arc/input/input'
-import { MetricCard } from '@/components/arc/metric-card/metric-card'
 import { Select } from '@/components/arc/select/select'
 import { Skeleton } from '@/components/arc/skeleton/skeleton'
 import { Switch } from '@/components/arc/switch/switch'
-import { TextShimmer } from '@/components/arc/text-shimmer/text-shimmer'
 import { Timeline, type TimelineEvent } from '@/components/arc/timeline/timeline'
 import { BrandIcon, TOOL_NAME, timeAgo } from './ui'
 import page from './page.module.css'
@@ -128,7 +125,7 @@ function SourceRow({ source, onChange }: { source: SourceView; onChange: (s: Sou
         </div>
         <div className={s.rowMeta}>
           {syncing
-            ? <TextShimmer>Syncing now</TextShimmer>
+            ? <span>Syncing now…</span>
             : source.last_error
             ? <Badge tone="danger" size="sm">Last sync failed</Badge>
             : !source.enabled
@@ -202,13 +199,12 @@ export function PeoplePage() {
   return (
     <Page title="People" lead="Linked accounts decide what each person can search: they only see the repos, projects and channels their accounts can see.">
       {error && <Alert tone="danger" title="People didn't load">{error}</Alert>}
-      {!data && !error && <Skeleton lines={4} avatar />}
+      {!data && !error && <Skeleton lines={4} />}
       {data?.length === 0 && <EmptyState title="No people yet" description="Create users with make add-user in backend/." />}
       {data && data.length > 0 && (
         <ul className={s.list} aria-label="People">
           {data.map(u => (
             <li key={u.username} className={s.row}>
-              <Avatar name={u.display_name || u.username} size="md" />
               <div className={s.rowMain}>
                 <div className={s.rowTitle}>
                   <span className={s.name}>{u.display_name || u.username}</span>
@@ -285,6 +281,13 @@ const EVENT: Record<string, [string, TimelineEvent['tone']]> = {
   slow_answer: ['Slow answer', 'neutral'],
 }
 
+const METRICS = [
+  ['processed', 'Learned', 'Items searchable in answers'],
+  ['new', 'Waiting', 'Fetched, learned on the next run'],
+  ['noise', 'Noise', 'Dropped as small talk or bots'],
+  ['failed', 'Failed', "Couldn't be processed"],
+] as const
+
 const loadStatus = () => api.status().then(status => ({ status, now: Date.now() })) // the Timeline's "now"
 
 export function ActivityPage() {
@@ -313,12 +316,15 @@ export function ActivityPage() {
       {!data && !error && <Skeleton lines={5} />}
       {data && (
         <div className={s.stack}>
-          <div className={s.metrics}>
-            <MetricCard label="Learned" value={items.processed ?? 0} context="Items searchable in answers" />
-            <MetricCard label="Waiting" value={items.new ?? 0} context="Fetched, learned on the next run" />
-            <MetricCard label="Noise" value={items.noise ?? 0} context="Dropped as small talk or bots" />
-            <MetricCard label="Failed" value={items.failed ?? 0} context="Couldn't be processed" />
-          </div>
+          <dl className={s.metrics}>
+            {METRICS.map(([key, label, context]) => (
+              <div key={key} className={s.metric}>
+                <dt>{label}</dt>
+                <dd>{(items[key] ?? 0).toLocaleString()}</dd>
+                <p>{context}</p>
+              </div>
+            ))}
+          </dl>
 
           {failing.length > 0 && (
             <Alert tone="danger" title={`${failing.length} ${failing.length === 1 ? 'source is' : 'sources are'} failing to sync`}>

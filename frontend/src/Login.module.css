@@ -1,17 +1,12 @@
 .page {
-  position: relative;
   display: grid;
   place-items: center;
   min-height: 100dvh;
   padding: var(--space-6) var(--space-4);
-  overflow: hidden;
   background: var(--background);
 }
 
-.rings { position: absolute; width: min(1100px, 160vw); fill: none; stroke: var(--border); stroke-width: 1; pointer-events: none; }
-
 .card {
-  position: relative;
   width: min(100%, 400px);
   padding: var(--space-8);
   border: 1px solid var(--border);
@@ -26,8 +21,6 @@
 
 .lead { margin-top: var(--space-2); color: var(--text-secondary); font-size: var(--text-base); }
 
-.tools { display: flex; gap: var(--space-3); margin-top: var(--space-4); }
-
 .form { display: flex; flex-direction: column; gap: var(--space-4); margin-top: var(--space-8); }
 .form > button { width: 100%; }
 
@@ -36,5 +29,4 @@
 
 @media (max-width: 480px) {
   .card { padding: var(--space-6); border: 0; box-shadow: none; background: transparent; }
-  .rings { display: none; }
 }
