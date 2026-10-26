@@ -86,13 +86,13 @@ The chat needs Ollama running, `make train-intent-router` done once, and `HF_TOK
 
 ## Demo
 
-`make demo` loads Acme Pay, a fictional payments company (`backend/demo/company.yaml`): six people, two private GitHub repos and a public one, two Jira projects and three Slack channels, with PRs, reviews, tickets and threads about real-looking decisions. It asks for one password for all demo users (or reads `DEMO_PASSWORD`), creates them with their linked accounts, and runs one learning run over the data (about 3 minutes; needs Ollama and both classifiers trained). Running it again changes nothing unless the file changed.
+`make demo` loads Acme Pay, a fictional payments company (`backend/data/demo/company.yaml`): six people, two private GitHub repos and a public one, two Jira projects and three Slack channels, with PRs, reviews, tickets and threads about real-looking decisions. It asks for one password for all demo users (or reads `DEMO_PASSWORD`), creates them with their linked accounts, and runs one learning run over the data (about 3 minutes; needs Ollama and both classifiers trained). Running it again changes nothing unless the file changed.
 
 Log in as `alice` (payments team) or `dave` (auth team) and ask, for example, "Why do orders go through a queue before payments?", "Who reviewed the idempotency keys PR?", "What does PAY-131 say?" or "Why did we choose Keycloak over Auth0?" (dave can answer that one; alice can't see it).
 
 The demo's sources never call the real GitHub, Jira or Slack. Load it into its own database if you don't want it next to real data, e.g. `DATABASE_URL=postgresql+psycopg://<you>@localhost:5434/syncra_demo make db-init migrate demo`. It's for local demos, not production.
 
-`make eval` then asks the 66 questions of `backend/demo/eval.yaml` as their users and prints a score report (right source found, leaks, citations, unsupported claims, "I don't know", time per stage); `python scripts/evaluate.py --search-only` checks retrieval alone in seconds.
+`make eval` then asks the 66 questions of `backend/data/demo/eval.yaml` as their users and prints a score report (right source found, leaks, citations, unsupported claims, "I don't know", time per stage); `python scripts/evaluate.py --search-only` checks retrieval alone in seconds.
 
 ## Production (Docker)
 

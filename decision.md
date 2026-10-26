@@ -38,7 +38,7 @@ Code-level details are in [`progress.md`](progress.md), and how the parts work t
 
 **All backend code in `backend/`, as one package called `app`.** The first version was built at the repo root, because deleting the old empty scaffold (125 zero-byte files) was blocked at first. When you asked for everything in `backend/`, the scaffold was removed and the code moved in.
 
-**The package is split by job:** `api`, `learning`, `chat`, `models`, `db`, `jobs` and `config`, with the yaml files in `backend/config/`. `app` is the name the FastAPI docs use, so imports read `from app.api.main import app`.
+**The package is split by job:** `api`, `learning`, `chat`, `models`, `db`, `jobs` and `config`, with the yaml files in `backend/config/`. `app` is the name the FastAPI docs use, so imports read `from app.main import app`.
 
 **A Makefile for every command.** `make install`, `make run`, `make worker`, `make migrate` and the rest call the virtual environment's programs directly, so nobody has to activate it or remember long commands. `make` comes with Apple's command line tools, which Homebrew installs anyway, and with most Linux setups.
 
@@ -108,7 +108,7 @@ Code-level details are in [`progress.md`](progress.md), and how the parts work t
 
 ## 6. Talking to the AI models
 
-**One gateway file for every model call** (`app/models/gateway.py`), as the plan asked. It is the only code that talks to Ollama or loads a Hugging Face model, and each call logs the model, the time it took and the token or item count. Changing how models run means changing one file.
+**One gateway file for every model call** (`app/ml/gateway.py`), as the plan asked. It is the only code that talks to Ollama or loads a Hugging Face model, and each call logs the model, the time it took and the token or item count. Changing how models run means changing one file.
 
 **A small Ollama client of our own, instead of the `ollama` package or LangChain.** It is about 120 lines on top of httpx, the HTTP library the connectors use too, and gives exact control over timeouts, retries, JSON output and streaming. LangChain especially would be a big dependency for things Syncra doesn't use.
 
@@ -198,7 +198,7 @@ Code-level details are in [`progress.md`](progress.md), and how the parts work t
 
 **Five training pairs per example (`num_iterations=5`) instead of SetFit's default sampling.** On this data it was as accurate as the default, but trained in about 16 seconds instead of 150.
 
-**Each machine trains its own copy.** `make train-triage` takes about 30 seconds, saves the model in `backend/trained_models/` (outside git) and stops with an error below 90% accuracy (it reached 98.3%). Committing the 87 MB model would bloat the repo.
+**Each machine trains its own copy.** `make train-triage` takes about 30 seconds, saves the model in `backend/models/` (outside git) and stops with an error below 90% accuracy (it reached 98.3%). Committing the 87 MB model would bloat the repo.
 
 **SetFit's own loader is bypassed.** It ignores the pinned model version and contacts Hugging Face on every load. Syncra builds and loads the model itself, and classifying makes no network calls.
 

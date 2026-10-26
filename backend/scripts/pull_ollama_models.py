@@ -6,7 +6,7 @@ Usage (from backend/):  .venv/bin/python scripts/pull_ollama_models.py   or   ma
 import subprocess
 import sys
 
-from app.config.settings import get_models_config
+from app.core.config import get_models_config
 
 
 def main() -> int:

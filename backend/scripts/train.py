@@ -9,7 +9,7 @@ About 20 s each on a laptop GPU, a few minutes on CPU.
 import logging
 import sys
 
-from app.models.gateway import train_setfit_held_out
+from app.ml.gateway import train_setfit_held_out
 
 ROLES = ("triage", "intent_router")
 

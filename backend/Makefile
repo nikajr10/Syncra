@@ -9,10 +9,10 @@ install:
 	.venv/bin/pip install -q -e ".[dev]"
 
 run:
-	.venv/bin/uvicorn app.api.main:app --reload
+	.venv/bin/uvicorn app.main:app --reload
 
 worker:
-	.venv/bin/python -m app.jobs.scheduler
+	.venv/bin/python -m app.workers.scheduler
 
 lint:
 	.venv/bin/ruff check . && .venv/bin/ruff format --check .

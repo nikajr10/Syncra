@@ -1,6 +1,6 @@
 """Evaluation runner (Task 10.2): `make eval`, after `make demo`.
 
-Asks every question of demo/eval.yaml as its user, through the real search, answer writer and
+Asks every question of data/demo/eval.yaml as its user, through the real search, answer writer and
 claim checker (guard, intent and rewriter are skipped: the questions stand alone), and prints:
 
 - right source in top 8: an expected item is among the evidence (answerable questions)
@@ -26,14 +26,14 @@ from typing import Any
 import yaml
 from sqlalchemy import select
 
-from app.chat import answer, search
-from app.chat.check import CITATION, check
-from app.chat.permissions import user_tags
-from app.config.settings import BACKEND_DIR
-from app.db.engine import new_session
-from app.db.schema import Item, Source, User
+from app.core.config import BACKEND_DIR
+from app.db.models import Item, Source, User
+from app.db.session import new_session
+from app.services.chat import answer, search
+from app.services.chat.check import CITATION, check
+from app.services.chat.permissions import user_tags
 
-EVAL_FILE = BACKEND_DIR / "demo" / "eval.yaml"
+EVAL_FILE = BACKEND_DIR / "data" / "demo" / "eval.yaml"
 IDK = "i don't know"
 
 

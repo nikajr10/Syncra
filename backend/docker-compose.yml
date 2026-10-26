@@ -59,7 +59,7 @@ services:
 
   api:
     <<: *backend
-    command: sh -c "alembic upgrade head && uvicorn app.api.main:app --host 0.0.0.0 --port 8000 --no-server-header"
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --no-server-header"
     ports:
       # Host-local only: the API has no login yet. Publish it through a TLS reverse proxy
       # (Caddy / nginx) on the same host, never directly on a public port.
@@ -72,7 +72,7 @@ services:
 
   worker:
     <<: *backend
-    command: python -m app.jobs.scheduler
+    command: python -m app.workers.scheduler
     depends_on:
       api:
         condition: service_healthy # api ran the migrations

@@ -8,8 +8,8 @@ Usage (from backend/):
 import sys
 from getpass import getpass
 
-from app.api.auth import add_user, link_account
-from app.db.engine import new_session
+from app.db.session import new_session
+from app.services.users import add_user, link_account
 
 
 def main(command: str) -> str:

@@ -217,7 +217,7 @@ make train-intent-router  # trains the chat's intent router (~25 s), prints its 
   `HF_TOKEN=…` and run `make download-models` again. Until then it's skipped (the script says so), the rest
   still download, and **chat messages fail at the prompt guard**.
 - Downloads are big and slow — do this on good Wi-Fi. You only do it once.
-- `make train-triage` and `make train-intent-router` save their classifiers in `backend/trained_models/`
+- `make train-triage` and `make train-intent-router` save their classifiers in `backend/models/`
   (not in git). Run each again whenever its examples (`backend/config/triage.yaml`,
   `backend/config/intent_router.yaml`) change after a `git pull`.
 
@@ -351,7 +351,7 @@ Postgres (`brew services`) and Ollama keep running in the background.
 
 **Ollama errors, or connection refused on port 11434**: start the Ollama app, or run `ollama serve`.
 
-**Port 8000 already in use**: find what's using it with `lsof -i :8000`, or run the API on another port with `.venv/bin/uvicorn app.api.main:app --reload --port 8001`.
+**Port 8000 already in use**: find what's using it with `lsof -i :8000`, or run the API on another port with `.venv/bin/uvicorn app.main:app --reload --port 8001`.
 
 **`No trained triage classifier in …`**: run `make train-triage`.
 

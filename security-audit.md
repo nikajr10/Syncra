@@ -32,21 +32,21 @@ There are **no real secrets** in the code or anywhere in the git history (detail
 
 Status: ✅ PASS · ❌ FAIL → 🔧 fixed · ⚠️ open · ➖ N/A
 
-**S-01 · Backend · High · 🔧 fixed.** JQL injection through `sources.external_id`, at `app/learning/connectors/jira.py:126`. Fix: ids are validated in `build_connector` (`app/learning/connectors/__init__.py:15`).
+**S-01 · Backend · High · 🔧 fixed.** JQL injection through `sources.external_id`, at `app/connectors/jira.py:126`. Fix: ids are validated in `build_connector` (`app/connectors/__init__.py:15`).
 
-**S-02 · Backend · High · 🔧 fixed.** Path traversal in GitHub API paths through `external_id`, at `app/learning/connectors/github.py:108`. Fix: the same allowlist regex.
+**S-02 · Backend · High · 🔧 fixed.** Path traversal in GitHub API paths through `external_id`, at `app/connectors/github.py:108`. Fix: the same allowlist regex.
 
-**S-03 · Backend · Low · 🔧 fixed.** The Slack id wasn't validated, so it could name a DM channel (`app/learning/connectors/slack.py:100`). Fix: only `C…` / `G…` channel ids are accepted.
+**S-03 · Backend · Low · 🔧 fixed.** The Slack id wasn't validated, so it could name a DM channel (`app/connectors/slack.py:100`). Fix: only `C…` / `G…` channel ids are accepted.
 
-**S-04 · Backend · Medium · 🔧 fixed.** GitHub paging followed any `Link: next` URL, sending the token there (`app/learning/connectors/github.py:90`). Fix: paging refuses to leave the API host.
+**S-04 · Backend · Medium · 🔧 fixed.** GitHub paging followed any `Link: next` URL, sending the token there (`app/connectors/github.py:90`). Fix: paging refuses to leave the API host.
 
 **S-05 · Infra · High · 🔧 fixed.** The API port was published on `0.0.0.0` with no auth (`docker-compose.yml`, `api.ports`). Fix: `127.0.0.1:` plus a TLS reverse proxy.
 
-**S-06 · Backend · Medium · 🔧 fixed.** No security headers or CSP (`app/api/main.py`). Fix: middleware on every response.
+**S-06 · Backend · Medium · 🔧 fixed.** No security headers or CSP (`app/main.py`). Fix: middleware on every response.
 
-**S-07 · Backend · Medium · 🔧 fixed.** Swagger / OpenAPI was public in production (`app/api/main.py`). Fix: the `API_DOCS` setting, default **off**; compose forces it off.
+**S-07 · Backend · Medium · 🔧 fixed.** Swagger / OpenAPI was public in production (`app/main.py`). Fix: the `API_DOCS` setting, default **off**; compose forces it off.
 
-**S-08 · Backend · Low · 🔧 fixed.** No generic 500 and no correlation id (`app/api/main.py`). Fix: `{"detail","request_id"}` plus `X-Request-ID`; details only go to the server log.
+**S-08 · Backend · Low · 🔧 fixed.** No generic 500 and no correlation id (`app/main.py`). Fix: `{"detail","request_id"}` plus `X-Request-ID`; details only go to the server log.
 
 **S-09 · Infra · Low · 🔧 fixed.** The `server: uvicorn` header leaked the server software (`Dockerfile` CMD, compose `api.command`). Fix: `--no-server-header`.
 
@@ -182,7 +182,7 @@ Status: ✅ PASS · ❌ FAIL → 🔧 fixed · ⚠️ open · ➖ N/A
 
 ## 6. Corrected code (what changed)
 
-`backend/app/learning/connectors/__init__.py`:
+`backend/app/connectors/__init__.py`:
 ```python
 EXTERNAL_ID = {
     "github": re.compile(r"[A-Za-z0-9-]+/(?!\.{1,2}$)[A-Za-z0-9._-]+"),  # owner/repo
@@ -198,14 +198,14 @@ def build_connector(source: Source) -> Connector:
 ```
 Every scheduled sync goes through `build_connector`, so one check covers all of them. A bad id shows up in `sources.last_error`.
 
-`backend/app/learning/connectors/github.py` (paging):
+`backend/app/connectors/github.py` (paging):
 ```python
 next_url = response.links.get("next", {}).get("url")
 if next_url and httpx.URL(next_url).host not in ("", self._origin):
     raise RuntimeError(f"GitHub paging left {self._origin}; not sending the token")
 ```
 
-`backend/app/api/main.py`: a security middleware adds the headers, a strict CSP (none on `/docs`), `X-Request-ID`, and a generic 500 `{"detail": "Internal server error", "request_id": …}`. Docs are controlled by `API_DOCS` (default `False`).
+`backend/app/main.py`: a security middleware adds the headers, a strict CSP (none on `/docs`), `X-Request-ID`, and a generic 500 `{"detail": "Internal server error", "request_id": …}`. Docs are controlled by `API_DOCS` (default `False`).
 
 `backend/docker-compose.yml`: `127.0.0.1:${API_PORT}:8000`, `--no-server-header`, `API_DOCS: "false"`, `security_opt: [no-new-privileges:true]`.
 

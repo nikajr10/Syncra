@@ -10,7 +10,7 @@ from alembic import op
 from pgvector.sqlalchemy import Vector
 from sqlalchemy.dialects import postgresql
 
-from app.config.settings import get_settings
+from app.core.config import get_settings
 
 revision = "0001"
 down_revision = None

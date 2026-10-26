@@ -7,7 +7,7 @@ import psycopg
 from psycopg import sql
 from sqlalchemy.engine import make_url
 
-from app.config.settings import get_settings
+from app.core.config import get_settings
 
 
 def ensure_database(url_str: str) -> None:

@@ -1,6 +1,6 @@
 """Load the demo company (Task 10.1): `make demo`.
 
-Creates the users and sources of demo/company.yaml (users get the password you type, or
+Creates the users and sources of data/demo/company.yaml (users get the password you type, or
 DEMO_PASSWORD), links the users' accounts, then runs one learning run: the demo sources are
 "synced" from the file and learned like real ones (needs Ollama and the trained classifiers).
 Running it again changes nothing unless the file changed. For local demos, not production.
@@ -12,11 +12,11 @@ from getpass import getpass
 
 from sqlalchemy import select
 
-from app.api.auth import add_user, link_account
-from app.db.engine import new_session
-from app.db.schema import Source, User
-from app.learning.connectors.demo import company
-from app.learning.pipeline import learn
+from app.connectors.demo import company
+from app.db.models import Source, User
+from app.db.session import new_session
+from app.services.learning.pipeline import learn
+from app.services.users import add_user, link_account
 
 
 def load(password: str) -> dict:

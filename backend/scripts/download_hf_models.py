@@ -5,7 +5,7 @@ Usage (from backend/):  .venv/bin/python scripts/download_hf_models.py   or   ma
 
 import logging
 
-from app.models.download import download_all
+from app.ml.download import download_all
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(message)s")

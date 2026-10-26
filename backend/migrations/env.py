@@ -1,8 +1,8 @@
 from alembic import context
 from sqlalchemy import create_engine, pool
 
-from app.config.settings import get_settings
-from app.db.schema import Base
+from app.core.config import get_settings
+from app.db.models import Base
 
 target_metadata = Base.metadata
 database_url = get_settings().database_url

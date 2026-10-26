@@ -46,7 +46,7 @@ A source is connected by adding one row to the `sources` table: a GitHub repo (`
 
 ## Every 15 minutes: one learning run
 
-The worker's timer (APScheduler) starts a run as soon as the worker starts, then every `SYNC_INTERVAL_MINUTES`. If a run is still going when the next one is due, that run is skipped and the job waits for the following one, so two runs never overlap. Each run goes through the steps below (`app/learning/pipeline.py`).
+The worker's timer (APScheduler) starts a run as soon as the worker starts, then every `SYNC_INTERVAL_MINUTES`. If a run is still going when the next one is due, that run is skipped and the job waits for the following one, so two runs never overlap. Each run goes through the steps below (`app/services/learning/pipeline.py`).
 
 ### Step 1: Fetch what's new
 
@@ -223,25 +223,25 @@ Each message a user sends goes through these steps, with the task that built eac
 
 All paths are under `backend/`.
 
-- The 15-minute timer: `app/jobs/scheduler.py` (started by `make worker`)
-- One learning run, start to finish: `app/learning/pipeline.py`
-- Fetching: `app/learning/connectors/` (`github.py`, `jira.py`, `slack.py`; the source id check is in `__init__.py`)
-- Saving items and cursors: `app/learning/sync.py`
-- Hiding private data: `app/learning/scrub.py`
-- The noise filter: `app/learning/triage.py`, trained on `config/triage.yaml`
-- Chunks: `app/learning/chunk.py`
-- Entities: `app/learning/entities.py`
-- Decisions: `app/learning/decisions.py`, with its prompt in `config/prompts/decision_reader.v1.yaml`
-- Vectors: `app/learning/embed.py`
-- Matching names to entities and people: `app/learning/link.py`
-- Links and decisions: `app/learning/graph.py`
-- Storing chunks: `app/learning/index.py`
-- Every model call: `app/models/gateway.py`, with the models listed in `config/models.yaml`
-- Settings: `app/config/settings.py`, reading `.env`
-- Tables: `app/db/schema.py`, created by the files in `migrations/versions/`
-- The API: `app/api/main.py`; users, logins and linked accounts: `app/api/auth.py` (the admin commands are `scripts/users.py`); chats: `app/api/chat.py`
-- Chat memory: `app/chat/memory.py`; the intent router: `app/chat/intent.py`, trained by `scripts/train.py`; the question rewriter: `app/chat/rewrite.py`, with its prompt in `config/prompts/question_rewriter.v1.yaml`
-- One chat message, start to finish: `app/chat/pipeline.py`; the prompt guard: `app/chat/guard.py`
-- Who may see what: `app/chat/permissions.py`; the three searches and the reranker: `app/chat/search.py`
-- Answers: `app/chat/answer.py` (prompt in `config/prompts/answer_writer.v2.yaml`); claim checks and confidence: `app/chat/check.py`
-- Actions: `app/chat/actions.py` (prompt in `config/prompts/action_planner.v1.yaml`), endpoints in `app/api/actions.py`
+- The 15-minute timer: `app/workers/scheduler.py` (started by `make worker`)
+- One learning run, start to finish: `app/services/learning/pipeline.py`
+- Fetching: `app/connectors/` (`github.py`, `jira.py`, `slack.py`; the source id check is in `__init__.py`)
+- Saving items and cursors: `app/services/learning/sync.py`
+- Hiding private data: `app/services/learning/scrub.py`
+- The noise filter: `app/services/learning/triage.py`, trained on `config/triage.yaml`
+- Chunks: `app/services/learning/chunk.py`
+- Entities: `app/services/learning/entities.py`
+- Decisions: `app/services/learning/decisions.py`, with its prompt in `config/prompts/decision_reader.v1.yaml`
+- Vectors: `app/services/learning/embed.py`
+- Matching names to entities and people: `app/services/learning/link.py`
+- Links and decisions: `app/services/learning/graph.py`
+- Storing chunks: `app/services/learning/index.py`
+- Every model call: `app/ml/gateway.py`, with the models listed in `config/models.yaml`
+- Settings: `app/core/config.py`, reading `.env`
+- Tables: `app/db/models.py`, created by the files in `migrations/versions/`
+- The API: `app/main.py`; users, logins and linked accounts: `app/api/routes/auth.py` (the admin commands are `scripts/users.py`); chats: `app/api/routes/chat.py`
+- Chat memory: `app/services/chat/memory.py`; the intent router: `app/services/chat/intent.py`, trained by `scripts/train.py`; the question rewriter: `app/services/chat/rewrite.py`, with its prompt in `config/prompts/question_rewriter.v1.yaml`
+- One chat message, start to finish: `app/services/chat/pipeline.py`; the prompt guard: `app/services/chat/guard.py`
+- Who may see what: `app/services/chat/permissions.py`; the three searches and the reranker: `app/services/chat/search.py`
+- Answers: `app/services/chat/answer.py` (prompt in `config/prompts/answer_writer.v2.yaml`); claim checks and confidence: `app/services/chat/check.py`
+- Actions: `app/services/chat/actions.py` (prompt in `config/prompts/action_planner.v1.yaml`), endpoints in `app/api/routes/actions.py`
